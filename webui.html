@@ -200,9 +200,7 @@ const PRESET_FIELDS = {
       Shift <input id="f-train-shift" type="number" value="0" style="width:60px" title="Adjust number position (pixels)"></label>`;
   },
   'clock': () => `
-    <p style="color:#888;font-size:.85rem">Time (font 3, left) + date (font 1, right) + optional nameday scroll.</p>
-    <label><input id="f-clock-namedays" type="checkbox" checked> Show namedays</label>
-    <label>Scroll count <input id="f-clock-scroll" type="number" value="99" min="1" max="99" style="width:80px"></label>`,
+    <p style="color:#888;font-size:.85rem">Time (font 3, left) + date (font 1, right) + weekday (font 1).</p>`,
   'imieniny': () => `
     <p style="color:#888;font-size:.85rem">Top: "IMIENINY" (font 2, centered). Bottom: scrolling names.</p>
     <label>Scroll count <input id="f-imieniny-scroll" type="number" value="99" min="1" max="99" style="width:80px"></label>`,
@@ -230,9 +228,7 @@ const OV_FIELDS = {
     <label>Line 1 <input id="ov-text" placeholder="Top line text"></label>
     <label>Line 2 <input id="ov-text2" placeholder="Bottom line text"></label>`,
   'clock': () => `
-    <p style="color:#888;font-size:.85rem">Time (font 3, left) + date (font 1, right).</p>
-    <label><input id="ov-clock-namedays" type="checkbox" checked> Show namedays</label>
-    <label>Scroll count <input id="ov-clock-scroll" type="number" value="99"></label>`,
+    <p style="color:#888;font-size:.85rem">Time (font 3, left) + date (font 1, right) + weekday (font 1).</p>`,
   'imieniny': () => `
     <p style="color:#888;font-size:.85rem">Top: "IMIENINY" (font 2, centered). Bottom: scrolling names.</p>
     <label>Scroll count <input id="ov-imieniny-scroll" type="number" value="99"></label>`,
@@ -276,8 +272,6 @@ function fillMsgFields(msg) {
   if($('f-tbs-font-top')) $('f-tbs-font-top').value = msg._tbs_font_top||1;
   if($('f-tbs-font-bottom')) $('f-tbs-font-bottom').value = msg._tbs_font_bottom||1;
   if($('f-tbs-scroll')) $('f-tbs-scroll').value = msg._tbs_scroll||99;
-  if($('f-clock-namedays')) $('f-clock-namedays').checked = msg._clock_namedays !== false;
-  if($('f-clock-scroll')) $('f-clock-scroll').value = msg._clock_scroll||99;
   if($('f-imieniny-scroll')) $('f-imieniny-scroll').value = msg._imieniny_scroll||99;
   if($('f-scroll')) $('f-scroll').value = msg._scroll||msg.scroll||'';
   if($('f-scrollcount')) $('f-scrollcount').value = msg.scroll||99;
@@ -329,7 +323,7 @@ function collectMsg() {
   if(preset === 'bus') return {...base, text: $('f-text')?.value||'', name: $('f-name')?.value||'', _scroll: $('f-scroll')?.value||'', scroll: parseInt($('f-scrollcount')?.value)||99, _bus_shift: parseInt($('f-bus-shift')?.value)||0, font:3, line:0, alignment:0};
   if(preset === 'train') return {...base, text: $('f-text')?.value||'', name: $('f-name')?.value||'', _train_to: $('f-train-to')?.value||'', _train_font_from: parseInt($('f-train-font-from')?.value)||1, _train_font_to: parseInt($('f-train-font-to')?.value)||1, _train_align_from: parseInt($('f-train-align-from')?.value)||0, _train_align_to: parseInt($('f-train-align-to')?.value)||0, _train_shift: parseInt($('f-train-shift')?.value)||0, font:1, line:0, alignment:0};
   if(preset === 'top-bottom-scroll') return {...base, text: $('f-text')?.value||'', _tbs_bottom: $('f-tbs-bottom')?.value||'', _tbs_font_top: parseInt($('f-tbs-font-top')?.value)||1, _tbs_font_bottom: parseInt($('f-tbs-font-bottom')?.value)||1, _tbs_scroll: parseInt($('f-tbs-scroll')?.value)||99, font:1, line:0, alignment:0};
-  if(preset === 'clock') return {...base, text:'', name:'', font:3, line:0, alignment:0, _clock_namedays: $('f-clock-namedays')?.checked ?? true, _clock_scroll: parseInt($('f-clock-scroll')?.value)||99};
+  if(preset === 'clock') return {...base, text:'', name:'', font:3, line:0, alignment:0};
   if(preset === 'imieniny') return {...base, text:'', name:'', font:1, line:0, alignment:1, _imieniny_scroll: parseInt($('f-imieniny-scroll')?.value)||99};
   return {...base, text: $('f-text')?.value||'', font:3, line:0, alignment:1};
 }
@@ -374,8 +368,6 @@ async function sendOverride() {
     msg._tbs_font_top = 1; msg._tbs_font_bottom = 1; msg.font = 1; msg.line = 0; msg.alignment = 1; msg.scroll = 0;
   } else if(preset === 'clock') {
     msg.text = ''; msg.font = 3; msg.line = 0; msg.alignment = 0; msg.scroll = 0;
-    msg._clock_namedays = $('ov-clock-namedays')?.checked ?? true;
-    msg._clock_scroll = parseInt($('ov-clock-scroll')?.value)||99;
   } else if(preset === 'imieniny') {
     msg.text = ''; msg.font = 1; msg.line = 0; msg.alignment = 1; msg.scroll = 0;
     msg._imieniny_scroll = parseInt($('ov-imieniny-scroll')?.value)||99;
