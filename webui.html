@@ -264,9 +264,10 @@ function renderPresetFields(prefix, preset) {
 }
 function onPresetChange(prefix) {
   const preset = $(`${prefix}-preset`).value;
-  $(`${prefix}-fields`).innerHTML = renderPresetFields(prefix, preset);
+  const container = prefix === 'f' ? 'preset-fields' : `${prefix}-fields`;
+  $(container).innerHTML = renderPresetFields(prefix, preset);
   if (prefix === 'f') {
-    $(`${prefix}-fields`).oninput = validateMsgLength;
+    $(container).oninput = validateMsgLength;
     validateMsgLength();
   }
 }
