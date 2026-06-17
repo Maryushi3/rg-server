@@ -593,6 +593,17 @@ def expand_preset(msg):
         parts.append(("__imieniny_names__", 1, 1, 1, 0, 96, sc))
         return parts
 
+    elif preset == "dht22":
+        temp = state.dht22_temp_str
+        hum = state.dht22_hum_str
+        ok = state.dht22_ok
+        parts.append((f"Temp: {temp} st.", 1, 0, 1, 0, 96, 0))
+        if ok:
+            parts.append((f"Wilg: {hum} pct.", 1, 1, 1, 0, 96, 0))
+        else:
+            parts.append(("Brak czujnika", 1, 1, 1, 0, 96, 0))
+        return parts
+
     else:  # custom
         return [(msg.get("text", ""), msg.get("font", 1), msg.get("line", 0),
                  msg.get("alignment", 0), msg.get("pos_x", 0),
@@ -660,6 +671,9 @@ class State:
         self.queue_pos = 0
         self.queue_thread_running = False
         self.serial = None
+        self.dht22_temp_str = "--.-"
+        self.dht22_hum_str = "--"
+        self.dht22_ok = False
 
     def next_id(self):
         import uuid
@@ -746,6 +760,42 @@ def queue_loop():
         else:
             state.queue_pos += 1
 
+def arduino_reader(port_path):
+    while state.queue_thread_running:
+        try:
+            ser = serial.Serial(port_path, 9600, timeout=2)
+            print(f"Arduino DHT22 on {port_path}")
+            while state.queue_thread_running:
+                line = ser.readline().decode("utf-8", errors="ignore").strip()
+                if not line:
+                    continue
+                if line.startswith("T:") and " H:" in line:
+                    try:
+                        parts = line.split()
+                        temp_s = parts[0][2:]
+                        hum_s = parts[1][2:]
+                        temp = float(temp_s)
+                        hum = float(hum_s)
+                        state.dht22_temp_str = temp_s
+                        state.dht22_hum_str = hum_s
+                        if not state.dht22_ok:
+                            print(f"DHT22: {temp_s}C {hum_s}%")
+                        state.dht22_ok = True
+                    except (ValueError, IndexError):
+                        state.dht22_ok = False
+                elif line == "ERR":
+                    state.dht22_ok = False
+        except serial.SerialException as e:
+            if state.dht22_ok:
+                print(f"Arduino lost: {e}")
+            state.dht22_ok = False
+            time.sleep(5)
+        except Exception as e:
+            if state.dht22_ok:
+                print(f"Arduino reader error: {e}")
+            state.dht22_ok = False
+            time.sleep(5)
+
 # ---- HTTP ----
 class Handler(BaseHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
@@ -795,6 +845,9 @@ class Handler(BaseHTTPRequestHandler):
                 "override_message": state.override.get("message", {}),
                 "time_synced": getattr(state, '_synced_time', 0) > 0,
                 "settings": state.settings,
+                "dht22_temp": state.dht22_temp_str,
+                "dht22_hum": state.dht22_hum_str,
+                "dht22_ok": state.dht22_ok,
             })
         elif p == "/api/messages":
             self._json({"messages": state.messages})
@@ -912,6 +965,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", default=8080, type=int)
     ap.add_argument("--serial", default="/dev/cu.usbmodem5A7E0300181")
+    ap.add_argument("--arduino-serial", default=None, help="Serial port for DHT22 Arduino")
     args = ap.parse_args()
 
     try:
@@ -925,6 +979,9 @@ def main():
         state.serial = None
 
     load_data()
+
+    if args.arduino_serial:
+        threading.Thread(target=arduino_reader, args=(args.arduino_serial,), daemon=True).start()
 
     html = load_html()
     print(f"WebUI loaded ({len(html)} bytes)")

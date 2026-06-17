@@ -51,6 +51,7 @@ form input:focus,form select:focus,form textarea:focus{outline:none;border-color
   <div class="stat"><div class="stat-label">Queue</div><div class="stat-val" id="s-queue">—</div></div>
   <div class="stat"><div class="stat-label">Position</div><div class="stat-val" id="s-pos">—</div></div>
   <div class="stat"><div class="stat-label">Messages</div><div class="stat-val" id="s-msgs">—</div></div>
+  <div class="stat"><div class="stat-label">DHT22</div><div class="stat-val" id="s-dht22">—</div></div>
 </div>
 <div style="margin:8px 0;display:flex;gap:6px;flex-wrap:wrap">
   <button class="btn btn-primary" onclick="testDisplay()">Test</button>
@@ -94,6 +95,7 @@ form input:focus,form select:focus,form textarea:focus{outline:none;border-color
             <option value="train">Train</option>
             <option value="clock">Clock</option>
             <option value="imieniny">Imieniny</option>
+            <option value="dht22">DHT22 Temp/Hum</option>
           </select>
         </label>
       </div>
@@ -122,16 +124,17 @@ form input:focus,form select:focus,form textarea:focus{outline:none;border-color
   <div id="ov-form">
     <form onsubmit="sendOverride();return false">
       <label>Preset
-        <select id="ov-preset" onchange="onPresetChange('ov')">
-          <option value="single-static">Custom</option>
-          <option value="scrolling">Scrolling</option>
-          <option value="two-static">Two Static Lines</option>
-          <option value="top-bottom-scroll">Top Static / Bottom Scroll</option>
-          <option value="bus">Bus</option>
-          <option value="train">Train</option>
-          <option value="clock">Clock</option>
-          <option value="imieniny">Imieniny</option>
-          </select>
+          <select id="ov-preset" onchange="onPresetChange('ov')">
+            <option value="single-static">Custom</option>
+            <option value="scrolling">Scrolling</option>
+            <option value="two-static">Two Static Lines</option>
+            <option value="top-bottom-scroll">Top Static / Bottom Scroll</option>
+            <option value="bus">Bus</option>
+            <option value="train">Train</option>
+            <option value="clock">Clock</option>
+            <option value="imieniny">Imieniny</option>
+            <option value="dht22">DHT22 Temp/Hum</option>
+            </select>
         </label>
       <div id="ov-fields"></div>
       <div class="row">
@@ -253,6 +256,9 @@ function renderPresetFields(prefix, preset) {
       <label>Font ${tbfopts('top')}</label>
       <label>Bottom Line (scrolling) <input id="${prefix}-tbs-bottom" placeholder="Scrolling text"></label>
       <label>Font ${tbfopts('bottom')}  Scroll count <input id="${prefix}-tbs-scroll" type="number" value="99" min="1" max="99" style="width:80px"></label>`,
+    'dht22': () => `
+      <p style="color:#888;font-size:.85rem">Temp: <span id="${prefix}-dht22-temp">...</span> °C &nbsp; Wilg: <span id="${prefix}-dht22-hum">...</span>%</p>
+      <p style="color:#555;font-size:.8rem">Top line: "Temp: XX.X st." &nbsp; Bottom line: "Wilg: XX pct."</p>`,
   };
   return (fields[preset] || fields['single-static'])();
 }
@@ -288,6 +294,7 @@ function buildMessage(prefix, preset) {
   if (preset === 'top-bottom-scroll') return {text: s('text',''), _tbs_bottom: s('tbs-bottom',''), _tbs_font_top: n('tbs-font-top',1), _tbs_font_bottom: n('tbs-font-bottom',1), _tbs_scroll: n('tbs-scroll',99), font:1, line:0, alignment:0};
   if (preset === 'clock') return {text:'', name:'', font:3, line:0, alignment:0};
   if (preset === 'imieniny') return {text:'', name:'', font:1, line:0, alignment:1, _imieniny_scroll: n('imieniny-scroll',99)};
+  if (preset === 'dht22') return {text:'', name:'', font:1, line:0, alignment:0};
   return {text: s('text',''), font:3, line:0, alignment:1};
 }
 onPresetChange('f');
@@ -418,6 +425,13 @@ async function loadStatus() {
   $('s-pos').textContent = `${d.queue_position} / ${d.messages_count}`;
   $('s-msgs').textContent = d.override_active ? 'OVERRIDE' : (d.messages_count + ' queued');
   $('s-msgs').className = 'stat-val ' + (d.override_active ? 'flash' : '');
+  $('s-dht22').textContent = d.dht22_ok ? (d.dht22_temp + 'C / ' + d.dht22_hum + '%') : 'No sensor';
+  $('s-dht22').className = 'stat-val ' + (d.dht22_ok ? 'ok' : 'warn');
+  for (const p of ['f','ov']) {
+    const t = $(p + '-dht22-temp');
+    const h = $(p + '-dht22-hum');
+    if (t && h) { t.textContent = d.dht22_ok ? d.dht22_temp : '--.-'; h.textContent = d.dht22_ok ? d.dht22_hum : '--'; }
+  }
   // Override section state
   if (d.override_active) {
     $('ov-badge').style.display = 'inline';
@@ -454,6 +468,7 @@ function loadMessages() {
         m.preset_id==='train'?`${m.text||''} ${m._train_to||''}  #${m.name||''}`:
         m.preset_id==='top-bottom-scroll'?`${(m.text||'').substring(0,20)} / ${(m._tbs_bottom||'').substring(0,20)}`:
         m.preset_id==='two-static'?((m.text||'').split('||').filter(Boolean).join(' / ')):
+        m.preset_id==='dht22'?'DHT22 Temp/Hum':
         m.preset_id==='scrolling'?`Scroll: ${(m.text||'').substring(0,25)}`:
         m.preset_id==='single-static'?(m.text||'Custom'):
         (m.text||'').substring(0,35);

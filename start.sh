@@ -21,14 +21,25 @@ detect_devices() {
 }
 
 SERIAL=""
+ARDUINO_SERIAL=""
 
-# Precedence: 1) --serial arg  2) auto-detect
-if [[ $# -ge 2 && "$1" == "--serial" ]]; then
-  SERIAL="$2"
-elif [[ $# -ge 1 && "$1" != "--serial" ]]; then
-  echo "Usage: $0 [--serial /dev/...]" >&2
+# Usage
+usage() {
+  echo "Usage: $0 [--serial /dev/...] [--arduino-serial /dev/...]" >&2
   exit 1
-elif [[ $# -eq 0 ]]; then
+}
+
+# Parse named args
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --serial) SERIAL="$2"; shift 2 ;;
+    --arduino-serial) ARDUINO_SERIAL="$2"; shift 2 ;;
+    *) usage ;;
+  esac
+done
+
+# If not specified, auto-detect RS485 interface
+if [[ -z "$SERIAL" ]]; then
   DEVICES=()
   while IFS= read -r line; do
     [[ -n "$line" ]] && DEVICES+=("$line")
@@ -42,7 +53,8 @@ elif [[ $# -eq 0 ]]; then
     SERIAL="${DEVICES[0]}"
     echo "Detected RS485 interface: $SERIAL" >&2
   else
-    echo "Multiple RS485 interfaces detected:" >&2
+    echo "Multiple USB serial devices detected:" >&2
+    DEVICE_DESCS=()
     for i in "${!DEVICES[@]}"; do
       desc=""
       if command -v system_profiler &>/dev/null; then
@@ -50,17 +62,52 @@ elif [[ $# -eq 0 ]]; then
       elif command -v udevadm &>/dev/null; then
         desc=$(udevadm info --name="${DEVICES[$i]}" 2>/dev/null | grep -E 'ID_MODEL=|ID_VENDOR=' | head -2 | cut -d= -f2 | tr '\n' ' ' || true)
       fi
+      DEVICE_DESCS[$i]="$desc"
       echo "  [$((i+1))] ${DEVICES[$i]}  $desc" >&2
     done
-    read -rp "Choose interface [1-${#DEVICES[@]}]: " choice < /dev/tty
-    choice="${choice:-1}"
+    echo "" >&2
+    echo "Which is the RS485 display interface?" >&2
+    read -rp "Choose [1-${#DEVICES[@]}] or 0 for none: " choice < /dev/tty
+    choice="${choice:-0}"
     if [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#DEVICES[@]} )); then
       SERIAL="${DEVICES[$((choice-1))]}"
-    else
-      echo "Invalid choice, running in SIMULATION MODE." >&2
+      echo "RS485: $SERIAL" >&2
+    fi
+    # Remaining devices — ask if one is the Arduino
+    if [[ -z "$ARDUINO_SERIAL" ]]; then
+      REMAINING=()
+      for i in "${!DEVICES[@]}"; do
+        [[ "${DEVICES[$i]}" != "$SERIAL" ]] && REMAINING+=("${DEVICES[$i]}")
+      done
+      if [[ ${#REMAINING[@]} -eq 1 ]]; then
+        echo "" >&2
+        echo "Detected additional device: ${REMAINING[0]} — is this the DHT22 Arduino?" >&2
+        read -rp "Use as Arduino sensor? [Y/n]: " yn < /dev/tty
+        if [[ "$yn" =~ ^[Nn] ]]; then
+          : # skip
+        else
+          ARDUINO_SERIAL="${REMAINING[0]}"
+          echo "Arduino: $ARDUINO_SERIAL" >&2
+        fi
+      elif [[ ${#REMAINING[@]} -gt 1 ]]; then
+        echo "" >&2
+        echo "Which is the DHT22 Arduino?" >&2
+        for i in "${!REMAINING[@]}"; do
+          echo "  [$((i+1))] ${REMAINING[$i]}  ${DEVICE_DESCS[$((i+1))]}" >&2
+        done
+        read -rp "Choose [1-${#REMAINING[@]}] or 0 for none: " choice2 < /dev/tty
+        choice2="${choice2:-0}"
+        if [[ "$choice2" =~ ^[0-9]+$ ]] && (( choice2 >= 1 && choice2 <= ${#REMAINING[@]} )); then
+          ARDUINO_SERIAL="${REMAINING[$((choice2-1))]}"
+          echo "Arduino: $ARDUINO_SERIAL" >&2
+        fi
+      fi
     fi
   fi
 fi
 
 cd "$SCRIPT_DIR"
-exec python3 server.py --port "$PORT" ${SERIAL:+--serial "$SERIAL"}
+ARGS="--port $PORT"
+[[ -n "$SERIAL" ]] && ARGS="$ARGS --serial $SERIAL"
+[[ -n "$ARDUINO_SERIAL" ]] && ARGS="$ARGS --arduino-serial $ARDUINO_SERIAL"
+exec python3 server.py $ARGS
