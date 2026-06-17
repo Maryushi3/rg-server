@@ -157,6 +157,11 @@ def nameday_names_only(now):
         return NAMEDAYS[idx].replace(",", ", ")
     return ""
 
+DAYS_PL = ["Poniedziałek", "Wtorek", "Środa", "Czwartek", "Piątek", "Sobota", "Niedziela"]
+
+def weekday_pl(now):
+    return DAYS_PL[now.weekday()].lower()
+
 # ---- RS485 Driver ----
 ADDR = "37 37"  # display 29
 
@@ -310,7 +315,7 @@ def expand_preset(msg):
         return parts
 
     elif preset == "clock":
-        # Time (font 3, line 0, left) + date (font 1, line 0, after time) + optional nameday scroll
+        # Time (font 3, line 0, left) + date (font 1, line 0, after time) + Polish weekday (line 1)
         from datetime import datetime
         now = datetime.now()
         time_str = now.strftime("%H:%M")
@@ -319,11 +324,14 @@ def expand_preset(msg):
         shift = msg.get("_clock_shift", 0)
         time_right = max(6, min(60, 2 + time_width + 2 + shift))
         parts.append(("__clock_time__", 3, 0, 0, 2, time_right, 0))
-        date_x = time_right
+        date_x = time_right + 4
         parts.append(("__clock_date__", 1, 0, 0, date_x, 96, 0))
         if msg.get("_clock_namedays", True):
-            sc = int(msg.get("_clock_scroll", 99))
-            parts.append(("__clock_nameday__", 1, 1, 0, date_x, 96, sc))
+            date_text = short_date(now)
+            weekday_text = weekday_pl(now)
+            f1_pw = lambda t: 4 * len(t)
+            weekday_x = date_x + max(0, (f1_pw(date_text) - f1_pw(weekday_text)) // 2)
+            parts.append(("__clock_weekday__", 1, 1, 0, weekday_x, 96, 0))
         return parts
 
     elif preset == "imieniny":
@@ -345,8 +353,8 @@ def fill_dynamic(text):
         return now.strftime("%H:%M")
     if text == "__clock_date__":
         return short_date(now)
-    if text == "__clock_nameday__":
-        return nameday_text(now)
+    if text == "__clock_weekday__":
+        return weekday_pl(now)
     if text == "__imieniny_names__":
         return nameday_names_only(now)
     if text == "__dynamic__":
