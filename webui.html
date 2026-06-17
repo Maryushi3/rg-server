@@ -106,6 +106,7 @@ form input:focus,form select:focus,form textarea:focus{outline:none;border-color
         <label>From <input id="f-schedule-from" type="datetime-local" style="width:auto" disabled></label>
         <label>To <input id="f-schedule-to" type="datetime-local" style="width:auto" disabled></label>
       </div>
+      <div id="msg-length-warn" style="color:#e33;font-size:.8rem;margin-top:4px;display:none">⚠ Text too long — max 240 characters per field</div>
       <div style="margin-top:8px;display:flex;gap:6px">
         <button type="submit" class="btn btn-primary">Save</button>
         <button type="button" class="btn btn-secondary" onclick="closeMsgEditor()">Cancel</button>
@@ -257,6 +258,16 @@ function renderPresetFields(prefix, preset) {
 function onPresetChange(prefix) {
   const preset = $(`${prefix}-preset`).value;
   $(`${prefix}-fields`).innerHTML = renderPresetFields(prefix, preset);
+  if (prefix === 'f') {
+    $(`${prefix}-fields`).oninput = validateMsgLength;
+    validateMsgLength();
+  }
+}
+function validateMsgLength() {
+  const inputs = document.querySelectorAll('#preset-fields input');
+  let over = false;
+  inputs.forEach(el => { if ((el.value||'').length > 240) over = true; });
+  $('msg-length-warn').style.display = over ? 'block' : 'none';
 }
 function buildMessage(prefix, preset) {
   const s = (id, def) => { const el = $(`${prefix}-${id}`); return el ? el.value : def; };

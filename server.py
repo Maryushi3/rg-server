@@ -182,9 +182,9 @@ NAMEDAYS = [
     "Alina,Aneta,Benon,Aubert,Aureusz",
     "Adolf,Adolfa,Adolfina,Adrianna,Awit",
     "Efrem,Elżbieta,Gerwazy,Amand,Amanda",
-    "Borzysław,Gerwazy,Julianna,Eurydyka,Grymilda",
-    "Bogna,Bogumiła,Bożena,Bratomir,Edburga",
-    "Albaniusz,Alicja,Alojza,Alojzy,Chloe",
+    "Borzysław, Gerwazy, Julianna, Eurydyka, Grymilda oraz Michalina, Odo, Protazy, Abraham, Adam, Adrian, Agata, Agnieszka, Alan, Albert, Albin, Aldona, Aleksander, Aleksandra, Alfred, Amadeusz, Amelia, Anastazja, Andrzej",
+    "Bogna, Bogumiła, Bożena, Bratomir, Edburga oraz Florentyna, Franciszek, Gemma, Hektor, Jaktor, Michał, Rafał, Abraham, Adam, Adrian, Agata, Agnieszka, Alan, Albert, Albin, Aldona, Aleksander, Aleksandra, Alfred",
+    "Albaniusz, Alicja, Alojza, Alojzy, Chloe oraz Demetria, Domamir, Lutfryd, Rudolf, Rudolfa, Rudolfina, Teodor, Abraham, Adam, Adrian, Agata, Agnieszka, Alan, Albert, Albin, Aldona, Aleksander, Aleksandra, Alfred",
     "Achacjusz,Achacy,Agenor,Alban,Flawiusz",
     "Agrypina,Albin,Bazyli,Anna,Hanna",
     "Dan,Danisz,Danuta,Emilia,Jan",
@@ -378,7 +378,7 @@ NAMEDAYS = [
     "Domawit,Dominik,Gosław,Dawid,Ekard",
     "Dawid,Dawida,Dionizy,Anizja,Egwin",
     "Korneliusz,Mariusz,Melania,Donata,Saturnina",
-    ""
+    "",
 ]
 DAYS_IN_MONTH = [0,31,28,31,30,31,30,31,31,30,31,30,31]
 
@@ -404,9 +404,9 @@ def nameday_text(now):
     return ""
 
 def nameday_names_only(now):
-    names = _nameday_list(now)
-    if names:
-        return ", ".join(names[:5])
+    idx = nameday_index(now.month, now.day)
+    if 0 <= idx < len(NAMEDAYS):
+        return NAMEDAYS[idx]
     return ""
 
 DAYS_PL = ["Poniedziałek", "Wtorek", "Środa", "Czwartek", "Piątek", "Sobota", "Niedziela"]
