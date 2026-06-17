@@ -654,6 +654,7 @@ class State:
             "preset_gap_ms": 100,
             "keepalive_sec": 60,
             "queue_running": True,
+            "random_mode": False,
         }
         self.override = {"active": False, "message": {}, "expires_at": 0}
         self.queue_pos = 0
@@ -739,7 +740,11 @@ def queue_loop():
         send_preset(state.serial, msg, state.settings.get("preset_gap_ms", 100), frames)
         state.last_frames = frames
         state.display_until = now + msg.get("duration_sec", 30)
-        state.queue_pos += 1
+        if state.settings.get("random_mode"):
+            import random
+            state.queue_pos = state.messages.index(random.choice(visible))
+        else:
+            state.queue_pos += 1
 
 # ---- HTTP ----
 class Handler(BaseHTTPRequestHandler):
