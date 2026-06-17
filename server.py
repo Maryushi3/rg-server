@@ -766,8 +766,8 @@ def queue_loop():
         if frames != getattr(state, 'last_frames', None):
             send_blank(state.serial)
             time.sleep(0.05)
-        send_preset(state.serial, msg, state.settings.get("preset_gap_ms", 100), frames)
-        state.last_frames = frames
+            send_preset(state.serial, msg, state.settings.get("preset_gap_ms", 100), frames)
+            state.last_frames = frames
         state.display_until = now + msg.get("duration_sec", 30)
         if state.settings.get("random_mode"):
             import random
