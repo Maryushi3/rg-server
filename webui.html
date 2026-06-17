@@ -84,7 +84,7 @@ form input:focus,form select:focus,form textarea:focus{outline:none;border-color
     <form onsubmit="saveMessage();return false">
       <div class="row">
         <label>Preset
-          <select id="f-preset" onchange="onPresetChange()">
+          <select id="f-preset" onchange="onPresetChange('f')">
             <option value="single-static">Custom</option>
             <option value="scrolling">Scrolling</option>
             <option value="two-static">Two Static Lines</option>
@@ -101,6 +101,11 @@ form input:focus,form select:focus,form textarea:focus{outline:none;border-color
         <label>Duration (sec) <input id="f-duration" type="number" value="30" min="1"></label>
         <label><input id="f-persistent" type="checkbox" checked style="width:auto;margin-top:16px"> Persistent</label>
       </div>
+      <div style="margin-top:6px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <label><input id="f-schedule-enabled" type="checkbox" onchange="scheduleToggle()" style="width:auto"> Scheduled</label>
+        <label>From <input id="f-schedule-from" type="datetime-local" style="width:auto" disabled></label>
+        <label>To <input id="f-schedule-to" type="datetime-local" style="width:auto" disabled></label>
+      </div>
       <div style="margin-top:8px;display:flex;gap:6px">
         <button type="submit" class="btn btn-primary">Save</button>
         <button type="button" class="btn btn-secondary" onclick="closeMsgEditor()">Cancel</button>
@@ -115,7 +120,7 @@ form input:focus,form select:focus,form textarea:focus{outline:none;border-color
   <div id="ov-form">
     <form onsubmit="sendOverride();return false">
       <label>Preset
-        <select id="ov-preset" onchange="onOvPresetChange()">
+        <select id="ov-preset" onchange="onPresetChange('ov')">
           <option value="single-static">Custom</option>
           <option value="scrolling">Scrolling</option>
           <option value="two-static">Two Static Lines</option>
@@ -162,153 +167,116 @@ const ALIGN_OPTS = [[0, 'Left'], [1, 'Center'], [2, 'Right']];
 function namedSelect(name, opts, sel) {
   return `<select id="${name}">${opts.map(([v,l]) => `<option value="${v}"${v==sel?' selected':''}>${l}</option>`).join('')}</select>`;
 }
-
-// ---- Preset field generators ----
-const PRESET_FIELDS = {
-  'single-static': () => `
-    <label>Text <input id="f-text" placeholder="Text"></label>
-    <div class="row">
-      <label>Font ${namedSelect('f-font', FONT_OPTS, 3)}</label>
-      <label>Line ${namedSelect('f-line', LINE_OPTS, 0)}</label>
-      <label>Align ${namedSelect('f-align', ALIGN_OPTS, 1)}</label>
-    </div>`,
-  'scrolling': () => `
-    <label>Text <input id="f-text" placeholder="Scrolling text"></label>
-    <label>Scroll count <input id="f-scroll" type="number" value="99" min="1" max="99"></label>
-    <div class="row">
-      <label>Font ${namedSelect('f-font', FONT_OPTS, 1)}</label>
-      <label>Line ${namedSelect('f-line', LINE_OPTS, 0)}</label>
-      <label>Align ${namedSelect('f-align', ALIGN_OPTS, 1)}</label>
-    </div>`,
-  'two-static': () => {
-    const fopts = (n,d) => `<select id="f-ts-font${n}" style="width:auto">${[[1,'Thin'],[2,'Thick']].map(([v,l]) => `<option value="${v}"${v==d?' selected':''}>${l}</option>`).join('')}</select>`;
-    const aopts = (n,d) => `<select id="f-ts-align${n}" style="width:auto">${[[0,'Left'],[1,'Center'],[2,'Right']].map(([v,l]) => `<option value="${v}"${v==d?' selected':''}>${l}</option>`).join('')}</select>`;
-    return `
-    <div class="row">
-      <label>Line 1 <input id="f-text" placeholder="Top line text"></label>
-      <label>Font ${fopts(1,1)} Align ${aopts(1,0)}</label>
-    </div>
-    <div class="row">
-      <label>Line 2 <input id="f-text2" placeholder="Bottom line text"></label>
-      <label>Font ${fopts(2,1)} Align ${aopts(2,0)}</label>
-    </div>`;
-  },
-  'bus': () => `
-    <div class="row">
-      <label>Route <input id="f-text" placeholder="e.g. 190" style="width:60px"></label>
-      <label>Shift <input id="f-bus-shift" type="number" value="0" style="width:60px" title="Adjust route right bound (pixels)"></label>
-      <label>Destination <input id="f-name" placeholder="e.g. CENTRUM"></label>
-    </div>
-    <div class="row">
-      <label>Scrolling route <input id="f-scroll" placeholder="Trasa: ... (optional)"></label>
-      <label>Scroll loops <input id="f-scrollcount" type="number" value="99" min="1" max="99"></label>
-    </div>`,
-  'train': () => {
-    const fopts = (sel,def) => `<select id="f-train-font-${sel}" style="width:auto">${[[1,'Thin'],[2,'Thick']].map(([v,l]) => `<option value="${v}"${v==def?' selected':''}>${l}</option>`).join('')}</select>`;
-    const aopts = (sel,def) => `<select id="f-train-align-${sel}" style="width:auto">${[[0,'Left'],[1,'Center'],[2,'Right']].map(([v,l]) => `<option value="${v}"${v==def?' selected':''}>${l}</option>`).join('')}</select>`;
-    return `
-    <div class="row">
-      <label>From <input id="f-text" placeholder="e.g. Warszawa Wsch.-"></label>
-      <label>To <input id="f-train-to" placeholder="e.g. -Berlin Gesund."></label>
-    </div>
-    <div class="row">
-      <label>Font ${fopts('from',1)} Align ${aopts('from',0)}</label>
-      <label>Font ${fopts('to',1)} Align ${aopts('to',2)}</label>
-    </div>
-    <label>Train # <input id="f-name" type="number" placeholder="e.g. 271" min="1" style="width:80px">
-      Shift <input id="f-train-shift" type="number" value="0" style="width:60px" title="Adjust number position (pixels)"></label>`;
-  },
-  'clock': () => `
-    <p style="color:#888;font-size:.85rem">Time (font 3, left) + date (font 1, right) + weekday (font 1).</p>`,
-  'imieniny': () => `
-    <p style="color:#888;font-size:.85rem">Top: "IMIENINY" (font 2, centered). Bottom: scrolling names.</p>
-    <label>Scroll count <input id="f-imieniny-scroll" type="number" value="99" min="1" max="99" style="width:80px"></label>`,
-  'top-bottom-scroll': () => {
-    const fopts = (n) => `<select id="f-tbs-font-${n}" style="width:auto">${[[1,'Thin'],[2,'Thick']].map(([v,l]) => `<option value="${v}"${v==1?' selected':''}>${l}</option>`).join('')}</select>`;
-    return `
-    <label>Top Line <input id="f-text" placeholder="Static text"></label>
-    <label>Font ${fopts('top')}</label>
-    <label>Bottom Line (scrolling) <input id="f-tbs-bottom" placeholder="Scrolling text"></label>
-    <label>Font ${fopts('bottom')}  Scroll count <input id="f-tbs-scroll" type="number" value="99" min="1" max="99" style="width:80px"></label>`;
-  },
-};
-const OV_FIELDS = {
-  'single-static': () => `
-    <label>Text <input id="ov-text" placeholder="Text"></label>
-    <div class="row">
-      <label>Font ${namedSelect('ov-font', FONT_OPTS, 3)}</label>
-      <label>Line ${namedSelect('ov-line', LINE_OPTS, 0)}</label>
-      <label>Align ${namedSelect('ov-align', ALIGN_OPTS, 1)}</label>
-    </div>`,
-  'scrolling': () => `
-    <label>Text <input id="ov-text" placeholder="Scrolling text"></label>
-    <label>Scroll count <input id="ov-scroll" type="number" value="99" min="1" max="99"></label>
-    <div class="row">
-      <label>Font ${namedSelect('ov-font', FONT_OPTS, 1)}</label>
-      <label>Line ${namedSelect('ov-line', LINE_OPTS, 0)}</label>
-      <label>Align ${namedSelect('ov-align', ALIGN_OPTS, 1)}</label>
-    </div>`,
-  'two-static': () => {
-    const fopts = (n,d) => `<select id="ov-ts-font${n}" style="width:auto">${[[1,'Thin'],[2,'Thick']].map(([v,l]) => `<option value="${v}"${v==d?' selected':''}>${l}</option>`).join('')}</select>`;
-    const aopts = (n,d) => `<select id="ov-ts-align${n}" style="width:auto">${[[0,'Left'],[1,'Center'],[2,'Right']].map(([v,l]) => `<option value="${v}"${v==d?' selected':''}>${l}</option>`).join('')}</select>`;
-    return `
-    <div class="row">
-      <label>Line 1 <input id="ov-text" placeholder="Top line text"></label>
-      <label>Font ${fopts(1,1)} Align ${aopts(1,0)}</label>
-    </div>
-    <div class="row">
-      <label>Line 2 <input id="ov-text2" placeholder="Bottom line text"></label>
-      <label>Font ${fopts(2,1)} Align ${aopts(2,0)}</label>
-    </div>`;
-  },
-  'bus': () => `
-    <div class="row">
-      <label>Route <input id="ov-text" placeholder="e.g. 190" style="width:60px"></label>
-      <label>Shift <input id="ov-bus-shift" type="number" value="0" style="width:60px" title="Adjust route right bound (pixels)"></label>
-      <label>Destination <input id="ov-name" placeholder="e.g. CENTRUM"></label>
-    </div>
-    <div class="row">
-      <label>Scrolling route <input id="ov-scroll" placeholder="Trasa: ... (optional)"></label>
-      <label>Scroll loops <input id="ov-scrollcount" type="number" value="99" min="1" max="99"></label>
-    </div>`,
-  'train': () => {
-    const fopts = (sel,def) => `<select id="ov-train-font-${sel}" style="width:auto">${[[1,'Thin'],[2,'Thick']].map(([v,l]) => `<option value="${v}"${v==def?' selected':''}>${l}</option>`).join('')}</select>`;
-    const aopts = (sel,def) => `<select id="ov-train-align-${sel}" style="width:auto">${[[0,'Left'],[1,'Center'],[2,'Right']].map(([v,l]) => `<option value="${v}"${v==def?' selected':''}>${l}</option>`).join('')}</select>`;
-    return `
-    <div class="row">
-      <label>From <input id="ov-text" placeholder="e.g. Warszawa Wsch.-"></label>
-      <label>To <input id="ov-train-to" placeholder="e.g. -Berlin Gesund."></label>
-    </div>
-    <div class="row">
-      <label>Font ${fopts('from',1)} Align ${aopts('from',0)}</label>
-      <label>Font ${fopts('to',1)} Align ${aopts('to',2)}</label>
-    </div>
-    <label>Train # <input id="ov-name" type="number" placeholder="e.g. 271" min="1" style="width:80px">
-      Shift <input id="ov-train-shift" type="number" value="0" style="width:60px" title="Adjust number position (pixels)"></label>`;
-  },
-  'clock': () => `
-    <p style="color:#888;font-size:.85rem">Time (font 3, left) + date (font 1, right) + weekday (font 1).</p>`,
-  'imieniny': () => `
-    <p style="color:#888;font-size:.85rem">Top: "IMIENINY" (font 2, centered). Bottom: scrolling names.</p>
-    <label>Scroll count <input id="ov-imieniny-scroll" type="number" value="99"></label>`,
-  'top-bottom-scroll': () => {
-    const fopts = (n) => `<select id="ov-tbs-font-${n}" style="width:auto">${[[1,'Thin'],[2,'Thick']].map(([v,l]) => `<option value="${v}"${v==1?' selected':''}>${l}</option>`).join('')}</select>`;
-    return `
-    <label>Top <input id="ov-text" placeholder="Static"></label>
-    <label>Font ${fopts('top')}</label>
-    <label>Bottom scroll <input id="ov-tbs-bottom" placeholder="Scrolling text"></label>
-    <label>Font ${fopts('bottom')}  Scroll count <input id="ov-tbs-scroll" type="number" value="99"></label>`;
-  },
-};
-
-function onPresetChange() {
-  $('preset-fields').innerHTML = (PRESET_FIELDS[$('f-preset').value] || PRESET_FIELDS['single-static'])();
+function toLocalDatetime(ts) {
+  if (!ts) return '';
+  const d = new Date(ts * 1000);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
-function onOvPresetChange() {
-  $('ov-fields').innerHTML = (OV_FIELDS[$('ov-preset').value] || OV_FIELDS['single-static'])();
+function fromLocalDatetime(str) {
+  if (!str) return 0;
+  return Math.floor(new Date(str).getTime() / 1000);
 }
-onPresetChange();
-onOvPresetChange();
+function scheduleToggle() {
+  const on = $('f-schedule-enabled').checked;
+  $('f-schedule-from').disabled = !on;
+  $('f-schedule-to').disabled = !on;
+}
+
+// ---- Unified preset field generator (prefix = 'f' for queue, 'ov' for override) ----
+function renderPresetFields(prefix, preset) {
+  const sel = (id, opts, def) => `<select id="${prefix}-${id}" style="width:auto">${opts.map(([v,l]) => `<option value="${v}"${v==def?' selected':''}>${l}</option>`).join('')}</select>`;
+  const thinThick = (n,d) => sel(`ts-font${n}`, [[1,'Thin'],[2,'Thick']], d);
+  const lcr = (n,d) => sel(`ts-align${n}`, [[0,'Left'],[1,'Center'],[2,'Right']], d);
+  const tfopts = (n,d) => sel(`train-font-${n}`, [[1,'Thin'],[2,'Thick']], d);
+  const taopts = (n,d) => sel(`train-align-${n}`, [[0,'Left'],[1,'Center'],[2,'Right']], d);
+  const tbfopts = (n) => sel(`tbs-font-${n}`, [[1,'Thin'],[2,'Thick']], 1);
+
+  const fields = {
+    'single-static': () => `
+      <label>Text <input id="${prefix}-text" placeholder="Text"></label>
+      <div class="row">
+        <label>Font ${sel('font', FONT_OPTS, 1)}</label>
+        <label>Line ${sel('line', LINE_OPTS, 0)}</label>
+        <label>Align ${sel('align', ALIGN_OPTS, 1)}</label>
+      </div>`,
+    'scrolling': () => `
+      <label>Text <input id="${prefix}-text" placeholder="Scrolling text"></label>
+      <label>Scroll count <input id="${prefix}-scroll" type="number" value="99" min="1" max="99"></label>
+      <div class="row">
+        <label>Font ${sel('font', FONT_OPTS, 1)}</label>
+        <label>Line ${sel('line', LINE_OPTS, 0)}</label>
+        <label>Align ${sel('align', ALIGN_OPTS, 1)}</label>
+      </div>`,
+    'two-static': () => `
+      <div class="row">
+        <label>Line 1 <input id="${prefix}-text" placeholder="Top line text"></label>
+        <label>Font ${thinThick(1,1)} Align ${lcr(1,0)}</label>
+      </div>
+      <div class="row">
+        <label>Line 2 <input id="${prefix}-text2" placeholder="Bottom line text"></label>
+        <label>Font ${thinThick(2,1)} Align ${lcr(2,0)}</label>
+      </div>`,
+    'bus': () => `
+      <div class="row">
+        <label>Route <input id="${prefix}-text" placeholder="e.g. 190" style="width:60px"></label>
+        <label>Shift <input id="${prefix}-bus-shift" type="number" value="0" style="width:60px"></label>
+        <label>Destination <input id="${prefix}-name" placeholder="e.g. CENTRUM"></label>
+      </div>
+      <div class="row">
+        <label>Scrolling route <input id="${prefix}-scroll" placeholder="Trasa: ..."></label>
+        <label>Scroll loops <input id="${prefix}-scrollcount" type="number" value="99" min="1" max="99"></label>
+      </div>`,
+    'train': () => `
+      <div class="row">
+        <label>From <input id="${prefix}-text" placeholder="e.g. Warszawa Wsch.-"></label>
+        <label>To <input id="${prefix}-train-to" placeholder="e.g. -Berlin Gesund."></label>
+      </div>
+      <div class="row">
+        <label>Font ${tfopts('from',1)} Align ${taopts('from',0)}</label>
+        <label>Font ${tfopts('to',1)} Align ${taopts('to',2)}</label>
+      </div>
+      <label>Train # <input id="${prefix}-name" type="number" placeholder="e.g. 271" min="1" style="width:80px">
+        Shift <input id="${prefix}-train-shift" type="number" value="0" style="width:60px"></label>`,
+    'clock': () => `
+      <p style="color:#888;font-size:.85rem">Time (font 3, left) + date (font 1, right) + weekday (font 1).</p>`,
+    'imieniny': () => `
+      <p style="color:#888;font-size:.85rem">Top: "IMIENINY" (font 2, centered). Bottom: scrolling names.</p>
+      <label>Scroll count <input id="${prefix}-imieniny-scroll" type="number" value="99" min="1" max="99" style="width:80px"></label>`,
+    'top-bottom-scroll': () => `
+      <label>Top Line <input id="${prefix}-text" placeholder="Static text"></label>
+      <label>Font ${tbfopts('top')}</label>
+      <label>Bottom Line (scrolling) <input id="${prefix}-tbs-bottom" placeholder="Scrolling text"></label>
+      <label>Font ${tbfopts('bottom')}  Scroll count <input id="${prefix}-tbs-scroll" type="number" value="99" min="1" max="99" style="width:80px"></label>`,
+  };
+  return (fields[preset] || fields['single-static'])();
+}
+function onPresetChange(prefix) {
+  const preset = $(`${prefix}-preset`).value;
+  $(`${prefix}-fields`).innerHTML = renderPresetFields(prefix, preset);
+}
+function buildMessage(prefix, preset) {
+  const s = (id, def) => { const el = $(`${prefix}-${id}`); return el ? el.value : def; };
+  const n = (id, def) => { const v = parseInt($(`${prefix}-${id}`)?.value); return isNaN(v) ? def : v; };
+  if (preset === 'single-static' || preset === 'scrolling') {
+    const f = {text: s('text',''), font: n('font',1), line: n('line',0), alignment: n('align',1), scroll: n('scroll',0)};
+    if (preset === 'scrolling') f.scroll = n('scroll',99);
+    return f;
+  }
+  if (preset === 'two-static') {
+    const t1 = s('text','');
+    const t2 = s('text2','');
+    return {text: t1 + (t2 ? '||'+t2 : ''), font: n('ts-font1',1), alignment: n('ts-align1',0), _ts_font2: n('ts-font2',1), _ts_align2: n('ts-align2',0), line:0};
+  }
+  if (preset === 'bus') return {text: s('text',''), name: s('name',''), _scroll: s('scroll',''), scroll: n('scrollcount',99), _bus_shift: n('bus-shift',0), font:3, line:0, alignment:0};
+  if (preset === 'train') return {text: s('text',''), name: s('name',''), _train_to: s('train-to',''), _train_font_from: n('train-font-from',1), _train_font_to: n('train-font-to',1), _train_align_from: n('train-align-from',0), _train_align_to: n('train-align-to',0), _train_shift: n('train-shift',0), font:1, line:0, alignment:0};
+  if (preset === 'top-bottom-scroll') return {text: s('text',''), _tbs_bottom: s('tbs-bottom',''), _tbs_font_top: n('tbs-font-top',1), _tbs_font_bottom: n('tbs-font-bottom',1), _tbs_scroll: n('tbs-scroll',99), font:1, line:0, alignment:0};
+  if (preset === 'clock') return {text:'', name:'', font:3, line:0, alignment:0};
+  if (preset === 'imieniny') return {text:'', name:'', font:1, line:0, alignment:1, _imieniny_scroll: n('imieniny-scroll',99)};
+  return {text: s('text',''), font:3, line:0, alignment:1};
+}
+onPresetChange('f');
+onPresetChange('ov');
 
 // ---- Message editor ----
 let editingId = null;
@@ -316,7 +284,7 @@ function showMsgEditor(msg) {
   editingId = msg ? msg.id : null;
   $('msg-editor').classList.remove('hidden');
   $('f-preset').value = msg ? (msg.preset_id||'single-static') : 'single-static';
-  onPresetChange();
+  onPresetChange('f');
   if(msg) setTimeout(() => fillMsgFields(msg), 50);
 }
 function fillMsgFields(msg) {
@@ -336,7 +304,10 @@ function fillMsgFields(msg) {
   if($('f-tbs-font-bottom')) $('f-tbs-font-bottom').value = msg._tbs_font_bottom||1;
   if($('f-tbs-scroll')) $('f-tbs-scroll').value = msg._tbs_scroll||99;
   if($('f-imieniny-scroll')) $('f-imieniny-scroll').value = msg._imieniny_scroll||99;
-  if($('f-scroll')) $('f-scroll').value = msg._scroll||msg.scroll||'';
+  if($('f-scroll')) {
+    if(msg.preset_id === 'bus') $('f-scroll').value = msg._scroll||'';
+    else $('f-scroll').value = msg.scroll||'';
+  }
   if($('f-scrollcount')) $('f-scrollcount').value = msg.scroll||99;
   if($('f-font')) $('f-font').value = msg.font||3;
   if($('f-ts-font1')) $('f-ts-font1').value = msg.font||1;
@@ -347,25 +318,15 @@ function fillMsgFields(msg) {
   if($('f-align')) $('f-align').value = msg.alignment||0;
   $('f-duration').value = msg.duration_sec||30;
   $('f-persistent').checked = msg.persistent !== false;
+  const sched = msg.schedule||{};
+  $('f-schedule-enabled').checked = sched.enabled||false;
+  $('f-schedule-from').value = toLocalDatetime(sched.from_ts);
+  $('f-schedule-to').value = toLocalDatetime(sched.to_ts);
+  scheduleToggle();
 }
 function closeMsgEditor() {
   editingId = null;
   $('msg-editor').classList.add('hidden');
-}
-function readForm(prefix) {
-  const s = (id, def) => {
-    const el = $(id);
-    return el ? el.value : def;
-  };
-  return {
-    text: s(prefix+'-text', ''),
-    name: s(prefix+'-name', ''),
-    _scroll: s(prefix+'-scroll', ''),
-    font: parseInt(s(prefix+'-font', '3'))||3,
-    line: parseInt(s(prefix+'-line', '0'))||0,
-    alignment: parseInt(s(prefix+'-align', '1'))||0,
-    scroll: parseInt(s(prefix+'-scroll', '0'))||0,
-  };
 }
 function collectMsg() {
   const preset = $('f-preset').value;
@@ -374,29 +335,14 @@ function collectMsg() {
     preset_id: preset,
     duration_sec: parseInt($('f-duration').value)||30,
     persistent: $('f-persistent').checked,
-    schedule: {enabled:false,from_ts:0,to_ts:0},
+    schedule: {
+      enabled: $('f-schedule-enabled').checked,
+      from_ts: fromLocalDatetime($('f-schedule-from').value),
+      to_ts: fromLocalDatetime($('f-schedule-to').value),
+    },
     pos_x: 0, width: 96,
   };
-  if(preset === 'single-static' || preset === 'scrolling') {
-    const f = readForm('f');
-    return {...base, text: f.text, font: f.font, line: f.line, alignment: f.alignment, scroll: preset==='scrolling'?f.scroll:0};
-  }
-  if(preset === 'two-static') {
-    const t1 = $('f-text')?.value||'';
-    const t2 = $('f-text2')?.value||'';
-    const text = t1 + (t2 ? '||'+t2 : '');
-    const font1 = parseInt($('f-ts-font1')?.value)||1;
-    const font2 = parseInt($('f-ts-font2')?.value)||1;
-    const align1 = parseInt($('f-ts-align1')?.value)||0;
-    const align2 = parseInt($('f-ts-align2')?.value)||0;
-    return {...base, text, font:font1, line:0, alignment:align1, _ts_font2: font2, _ts_align2: align2};
-  }
-  if(preset === 'bus') return {...base, text: $('f-text')?.value||'', name: $('f-name')?.value||'', _scroll: $('f-scroll')?.value||'', scroll: parseInt($('f-scrollcount')?.value)||99, _bus_shift: parseInt($('f-bus-shift')?.value)||0, font:3, line:0, alignment:0};
-  if(preset === 'train') return {...base, text: $('f-text')?.value||'', name: $('f-name')?.value||'', _train_to: $('f-train-to')?.value||'', _train_font_from: parseInt($('f-train-font-from')?.value)||1, _train_font_to: parseInt($('f-train-font-to')?.value)||1, _train_align_from: parseInt($('f-train-align-from')?.value)||0, _train_align_to: parseInt($('f-train-align-to')?.value)||0, _train_shift: parseInt($('f-train-shift')?.value)||0, font:1, line:0, alignment:0};
-  if(preset === 'top-bottom-scroll') return {...base, text: $('f-text')?.value||'', _tbs_bottom: $('f-tbs-bottom')?.value||'', _tbs_font_top: parseInt($('f-tbs-font-top')?.value)||1, _tbs_font_bottom: parseInt($('f-tbs-font-bottom')?.value)||1, _tbs_scroll: parseInt($('f-tbs-scroll')?.value)||99, font:1, line:0, alignment:0};
-  if(preset === 'clock') return {...base, text:'', name:'', font:3, line:0, alignment:0};
-  if(preset === 'imieniny') return {...base, text:'', name:'', font:1, line:0, alignment:1, _imieniny_scroll: parseInt($('f-imieniny-scroll')?.value)||99};
-  return {...base, text: $('f-text')?.value||'', font:3, line:0, alignment:1};
+  return {...base, ...buildMessage('f', preset)};
 }
 async function saveMessage() {
   const msg = collectMsg();
@@ -419,53 +365,8 @@ async function deleteMessage(id) {
 // ---- Override ----
 async function sendOverride() {
   const preset = $('ov-preset').value;
-  const msg = {preset_id: preset, pos_x:0, width:96};
+  const msg = {preset_id: preset, pos_x:0, width:96, ...buildMessage('ov', preset)};
   const expires = parseInt($('ov-expires').value)||0;
-  if(preset === 'single-static') {
-    const f = readForm('ov');
-    Object.assign(msg, {text: f.text, font: f.font, line: f.line, alignment: f.alignment, scroll:0});
-  } else if(preset === 'scrolling') {
-    const f = readForm('ov');
-    Object.assign(msg, {text: f.text, font: f.font, line: f.line, alignment: f.alignment, scroll: parseInt($('ov-scroll')?.value)||99});
-  } else if(preset === 'two-static') {
-    const t1 = $('ov-text')?.value||'';
-    const t2 = $('ov-text2')?.value||'';
-    msg.text = t1 + (t2 ? '||'+t2 : '');
-    msg.font = parseInt($('ov-ts-font1')?.value)||1;
-    msg.alignment = parseInt($('ov-ts-align1')?.value)||0;
-    msg._ts_font2 = parseInt($('ov-ts-font2')?.value)||1;
-    msg._ts_align2 = parseInt($('ov-ts-align2')?.value)||0;
-    msg.line = 0;
-  } else if(preset === 'bus') {
-    msg.text = $('ov-text')?.value||'';
-    msg.name = $('ov-name')?.value||'';
-    msg._scroll = $('ov-scroll')?.value||'';
-    msg.scroll = parseInt($('ov-scrollcount')?.value)||99;
-    msg._bus_shift = parseInt($('ov-bus-shift')?.value)||0;
-    msg.font = 3; msg.line = 0; msg.alignment = 0;
-  } else if(preset === 'train') {
-    msg.text = $('ov-text')?.value||'';
-    msg.name = $('ov-name')?.value||'';
-    msg._train_to = $('ov-train-to')?.value||'';
-    msg._train_font_from = parseInt($('ov-train-font-from')?.value)||1;
-    msg._train_font_to = parseInt($('ov-train-font-to')?.value)||1;
-    msg._train_align_from = parseInt($('ov-train-align-from')?.value)||0;
-    msg._train_align_to = parseInt($('ov-train-align-to')?.value)||0;
-    msg._train_shift = parseInt($('ov-train-shift')?.value)||0;
-    msg.font = 1; msg.line = 0; msg.alignment = 0;
-  } else if(preset === 'top-bottom-scroll') {
-    msg.text = $('ov-text')?.value||'';
-    msg._tbs_bottom = $('ov-tbs-bottom')?.value||'';
-    msg._tbs_scroll = parseInt($('ov-tbs-scroll')?.value)||99;
-    msg._tbs_font_top = parseInt($('ov-tbs-font-top')?.value)||1;
-    msg._tbs_font_bottom = parseInt($('ov-tbs-font-bottom')?.value)||1;
-    msg.font = 1; msg.line = 0; msg.alignment = 1; msg.scroll = 0;
-  } else if(preset === 'clock') {
-    msg.text = ''; msg.font = 3; msg.line = 0; msg.alignment = 0; msg.scroll = 0;
-  } else if(preset === 'imieniny') {
-    msg.text = ''; msg.font = 1; msg.line = 0; msg.alignment = 1; msg.scroll = 0;
-    msg._imieniny_scroll = parseInt($('ov-imieniny-scroll')?.value)||99;
-  }
   await api('POST', '/api/override', {active:true, message:msg, expires_at: expires ? Math.floor(Date.now()/1000)+expires : 0});
   loadStatus();
 }

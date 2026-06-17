@@ -487,12 +487,12 @@ def expand_preset(msg):
     parts = []
 
     if preset == "scrolling":
-        return [(msg["text"], msg.get("font", 1), msg.get("line", 0),
+        return [(msg.get("text", ""), msg.get("font", 1), msg.get("line", 0),
                  msg.get("alignment", 1), msg.get("pos_x", 0),
                  msg.get("width", 96), msg.get("scroll", 99))]
 
     elif preset == "single-static":
-        return [(msg["text"], msg.get("font", 1), msg.get("line", 0),
+        return [(msg.get("text", ""), msg.get("font", 1), msg.get("line", 0),
                  msg.get("alignment", 0), msg.get("pos_x", 0),
                  msg.get("width", 96), 0)]
 
@@ -682,10 +682,44 @@ def load_data():
 
 def queue_loop():
     while state.queue_thread_running:
-        if not state.settings["queue_running"] or state.override.get("active"):
+        if state.override.get("active"):
+            exp = state.override.get("expires_at", 0)
+            if exp and time.time() >= exp:
+                state.override = {"active": False, "message": {}, "expires_at": 0}
+            else:
+                om = state.override.get("message", {})
+                if om.get("preset_id") in ("clock", "imieniny"):
+                    frames = preset_frames(om)
+                    if frames != getattr(state, 'last_frames', None):
+                        do_clear = True
+                        if om.get("preset_id") == "clock":
+                            old = getattr(state, '_clock_time', '')
+                            new = fill_dynamic("__clock_time__")
+                            if old and new and old[0] == new[0] and len(old) == len(new):
+                                do_clear = False
+                            state._clock_time = new
+                        if do_clear:
+                            send_blank(state.serial)
+                            time.sleep(0.05)
+                        send_preset(state.serial, om, state.settings.get("preset_gap_ms", 100), frames)
+                        state.last_frames = frames
             time.sleep(1)
             continue
-        visible = [m for m in state.messages if not m.get("hidden")]
+        if not state.settings["queue_running"]:
+            time.sleep(1)
+            continue
+        now = time.time()
+        visible = []
+        for m in state.messages:
+            if m.get("hidden"):
+                continue
+            sched = m.get("schedule") or {}
+            if sched.get("enabled"):
+                if sched.get("from_ts", 0) and now < sched["from_ts"]:
+                    continue
+                if sched.get("to_ts", 0) and now > sched["to_ts"]:
+                    continue
+            visible.append(m)
         if not visible:
             time.sleep(1)
             continue
@@ -695,7 +729,6 @@ def queue_loop():
         if msg.get("hidden"):
             state.queue_pos += 1
             continue
-        now = time.time()
         dur = msg.get("duration_sec", 30)
         last = getattr(state, 'last_display', 0)
         if now - last < dur:
@@ -789,9 +822,12 @@ class Handler(BaseHTTPRequestHandler):
             b = self._body()
             state.override = b
             if b.get("active") and b.get("message"):
+                msg = b["message"]
+                frames = preset_frames(msg)
                 send_blank(state.serial)
                 time.sleep(0.05)
-                send_preset(state.serial, b["message"], state.settings.get("preset_gap_ms", 100))
+                send_preset(state.serial, msg, state.settings.get("preset_gap_ms", 100), frames)
+                state.last_frames = frames
             self._json(state.override)
         elif p == "/api/cancel-override":
             state.override = {"active": False, "message": {}, "expires_at": 0}
@@ -825,9 +861,11 @@ class Handler(BaseHTTPRequestHandler):
                     state.override = {"active": False, "message": {}, "expires_at": 0}
                     state.queue_pos = i + 1
                     state.last_display = time.time()
+                    frames = preset_frames(m)
                     send_blank(state.serial)
                     time.sleep(0.05)
-                    send_preset(state.serial, m, state.settings.get("preset_gap_ms", 100))
+                    send_preset(state.serial, m, state.settings.get("preset_gap_ms", 100), frames)
+                    state.last_frames = frames
                     return self._json({"ok": True, "index": i})
             self._json({"error": "not found"}, 404)
         else:
