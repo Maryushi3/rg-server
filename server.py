@@ -440,8 +440,8 @@ def make_message(text, font=3, line=0, alignment=1, x=0, w=96, scroll=0):
     xl = hex_char(x % 16)
     wh = hex_char(w // 16)
     wl = hex_char(w % 16)
-    sh = hex_char(scroll // 16)
-    sl = hex_char(scroll % 16)
+    sh = hex_char(scroll // 10)
+    sl = hex_char(scroll % 10)
     ctrl = f"38 30 {lb} {ab} 37 {fb} {xh} {xl} {wh} {wl} {sh} {sl}"
     content = f"{ADDR} {length} {ctrl} {tx}"
     ck = sum(int(v, 16) for v in content.split()) % 256
