@@ -144,7 +144,10 @@ form input:focus,form select:focus,form textarea:focus{outline:none;border-color
   <div id="ov-active" style="display:none">
     <p style="color:#e33;font-weight:bold;margin-bottom:6px">Override active — queue paused</p>
     <div id="ov-active-detail" style="color:#888;font-size:.85rem;margin-bottom:8px"></div>
-    <button type="button" class="btn btn-danger" onclick="cancelOverride()">Stop Override</button>
+    <div style="display:flex;gap:6px">
+      <button type="button" class="btn btn-danger" onclick="cancelOverride()">Stop Override</button>
+      <button type="button" class="btn btn-primary" onclick="saveOverrideToQueue()">Save to Messages</button>
+    </div>
   </div>
 </div>
 
@@ -378,6 +381,16 @@ async function syncTime() {
 async function cancelOverride() {
   await api('POST','/api/cancel-override');
   loadStatus();
+}
+async function saveOverrideToQueue() {
+  const ov = await api('GET','/api/override');
+  const msg = ov.message || {};
+  if (!msg.preset_id) return;
+  msg.duration_sec = 30;
+  msg.persistent = true;
+  msg.pos_x = 0; msg.width = 96;
+  await api('POST', '/api/messages', msg);
+  loadMessages();
 }
 async function skipTo(id) {
   await api('POST', `/api/skip-to-message?id=${encodeURIComponent(id)}`);
