@@ -101,7 +101,7 @@ form input:focus,form select:focus,form textarea:focus{outline:none;border-color
       </div>
       <div id="preset-fields"></div>
       <div class="row">
-        <label>Duration (sec) <input id="f-duration" type="number" value="30" min="1"></label>
+        <label>Duration (sec) <input id="f-duration" type="number" value="10" min="1"></label>
         <label><input id="f-persistent" type="checkbox" checked style="width:auto;margin-top:16px"> Persistent</label>
       </div>
       <div style="margin-top:6px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
@@ -339,7 +339,7 @@ function fillMsgFields(msg) {
   if($('f-ts-align2')) $('f-ts-align2').value = msg._ts_align2||0;
   if($('f-line')) $('f-line').value = msg.line||0;
   if($('f-align')) $('f-align').value = msg.alignment||0;
-  $('f-duration').value = msg.duration_sec||30;
+  $('f-duration').value = msg.duration_sec||10;
   $('f-persistent').checked = msg.persistent !== false;
   const sched = msg.schedule||{};
   $('f-schedule-enabled').checked = sched.enabled||false;
@@ -356,7 +356,7 @@ function collectMsg() {
   const base = {
     id: editingId||'',
     preset_id: preset,
-    duration_sec: parseInt($('f-duration').value)||30,
+    duration_sec: parseInt($('f-duration').value)||10,
     persistent: $('f-persistent').checked,
     schedule: {
       enabled: $('f-schedule-enabled').checked,
@@ -406,7 +406,7 @@ async function saveOverrideToQueue() {
   const ov = await api('GET','/api/override');
   const msg = ov.message || {};
   if (!msg.preset_id) return;
-  msg.duration_sec = 30;
+  msg.duration_sec = 10;
   msg.persistent = true;
   msg.pos_x = 0; msg.width = 96;
   await api('POST', '/api/messages', msg);
@@ -492,7 +492,7 @@ function loadMessages() {
           <button class="btn btn-sm btn-secondary" onclick="editMessage('${m.id}')">Edit</button>
           <button class="btn btn-sm btn-danger" onclick="deleteMessage('${m.id}')">Del</button>
           <span style="flex:1"></span>
-          <span style="color:#888;font-size:.75rem">${m.duration_sec||30}s</span>
+          <span style="color:#888;font-size:.75rem">${m.duration_sec||10}s</span>
         </div>
       </div>`;
     }).join('');

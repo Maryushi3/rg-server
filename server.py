@@ -768,7 +768,7 @@ def queue_loop():
             time.sleep(0.05)
             send_preset(state.serial, msg, state.settings.get("preset_gap_ms", 100), frames)
             state.last_frames = frames
-        state.display_until = now + msg.get("duration_sec", 30)
+        state.display_until = now + msg.get("duration_sec", 10)
         if state.settings.get("random_mode"):
             import random
             state.queue_pos = state.messages.index(random.choice(visible))
@@ -931,7 +931,7 @@ class Handler(BaseHTTPRequestHandler):
                 if m.get("id") == mid:
                     state.override = {"active": False, "message": {}, "expires_at": 0}
                     state.queue_pos = i + 1
-                    state.display_until = time.time() + m.get("duration_sec", 30)
+                    state.display_until = time.time() + m.get("duration_sec", 10)
                     frames = preset_frames(m)
                     send_blank(state.serial)
                     time.sleep(0.05)
