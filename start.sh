@@ -50,8 +50,16 @@ if [[ -z "$SERIAL" ]]; then
     echo "Starting in SIMULATION MODE (no display)." >&2
     echo "Pass --serial /dev/... to use a specific device." >&2
   elif [[ ${#DEVICES[@]} -eq 1 ]]; then
-    SERIAL="${DEVICES[0]}"
-    echo "Detected RS485 interface: $SERIAL" >&2
+    echo "Single serial device found: ${DEVICES[0]}" >&2
+    echo "Is this the RS485 display interface or the DHT22 Arduino?" >&2
+    read -rp "[R]S485 or [A]rduino? " role < /dev/tty
+    if [[ "$role" =~ ^[Aa] ]]; then
+      ARDUINO_SERIAL="${DEVICES[0]}"
+      echo "Arduino: $ARDUINO_SERIAL  (starting in simulation mode for RS485)" >&2
+    else
+      SERIAL="${DEVICES[0]}"
+      echo "RS485: $SERIAL" >&2
+    fi
   else
     echo "Multiple USB serial devices detected:" >&2
     DEVICE_DESCS=()

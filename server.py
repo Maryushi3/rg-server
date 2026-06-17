@@ -761,10 +761,12 @@ def queue_loop():
             state.queue_pos += 1
 
 def arduino_reader(port_path):
+    print(f"Arduino reader: connecting to {port_path} ...")
     while state.queue_thread_running:
         try:
             ser = serial.Serial(port_path, 9600, timeout=2)
             print(f"Arduino DHT22 on {port_path}")
+            state.dht22_ok = False
             while state.queue_thread_running:
                 line = ser.readline().decode("utf-8", errors="ignore").strip()
                 if not line:
@@ -774,25 +776,23 @@ def arduino_reader(port_path):
                         parts = line.split()
                         temp_s = parts[0][2:]
                         hum_s = parts[1][2:]
-                        temp = float(temp_s)
-                        hum = float(hum_s)
+                        float(temp_s)
+                        float(hum_s)
                         state.dht22_temp_str = temp_s
                         state.dht22_hum_str = hum_s
                         if not state.dht22_ok:
                             print(f"DHT22: {temp_s}C {hum_s}%")
                         state.dht22_ok = True
                     except (ValueError, IndexError):
-                        state.dht22_ok = False
+                        pass
                 elif line == "ERR":
                     state.dht22_ok = False
         except serial.SerialException as e:
-            if state.dht22_ok:
-                print(f"Arduino lost: {e}")
+            print(f"Arduino serial error: {e}")
             state.dht22_ok = False
             time.sleep(5)
         except Exception as e:
-            if state.dht22_ok:
-                print(f"Arduino reader error: {e}")
+            print(f"Arduino reader error: {e}")
             state.dht22_ok = False
             time.sleep(5)
 
@@ -982,6 +982,8 @@ def main():
 
     if args.arduino_serial:
         threading.Thread(target=arduino_reader, args=(args.arduino_serial,), daemon=True).start()
+    else:
+        print("No Arduino sensor (use --arduino-serial /dev/... for DHT22)")
 
     html = load_html()
     print(f"WebUI loaded ({len(html)} bytes)")
