@@ -980,6 +980,8 @@ def main():
 
     load_data()
 
+    state.queue_thread_running = True
+
     if args.arduino_serial:
         threading.Thread(target=arduino_reader, args=(args.arduino_serial,), daemon=True).start()
     else:
@@ -988,7 +990,6 @@ def main():
     html = load_html()
     print(f"WebUI loaded ({len(html)} bytes)")
 
-    state.queue_thread_running = True
     threading.Thread(target=queue_loop, daemon=True).start()
 
     handler = partial(Handler, html=html)
