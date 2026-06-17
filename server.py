@@ -3,12 +3,13 @@
 RG Display Server — local RS485 controller for R&G LED displays.
 Run: python server.py [--port 8080] [--serial /dev/...]
 """
-import argparse, json, math, os, serial, threading, time
+import argparse, json, math, os, re, serial, threading, time
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 from functools import partial
 
 DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "messages.json")
+SETTINGS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "settings.json")
 
 # ---- Clock Data (mirrors clock.hpp) ----
 MONTH_PL = ["sty","lut","mar","kwi","maj","cze","lip","sie","wrz","paź","lis","gru"]
@@ -406,7 +407,7 @@ def nameday_text(now):
 def nameday_names_only(now):
     idx = nameday_index(now.month, now.day)
     if 0 <= idx < len(NAMEDAYS):
-        return NAMEDAYS[idx]
+        return re.sub(r",(?!\s)", ", ", NAMEDAYS[idx])
     return ""
 
 DAYS_PL = ["Poniedziałek", "Wtorek", "Środa", "Czwartek", "Piątek", "Sobota", "Niedziela"]
@@ -695,6 +696,20 @@ def load_data():
         except Exception as e:
             print(f"Failed to load {DATA_FILE}: {e}")
 
+def save_settings():
+    with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+        json.dump(state.settings, f, ensure_ascii=False, indent=2)
+
+def load_settings():
+    if os.path.exists(SETTINGS_FILE):
+        try:
+            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+                saved = json.load(f)
+            state.settings.update(saved)
+            print(f"Loaded settings from {SETTINGS_FILE}")
+        except Exception as e:
+            print(f"Failed to load {SETTINGS_FILE}: {e}")
+
 def queue_loop():
     while state.queue_thread_running:
         if state.override.get("active"):
@@ -944,6 +959,7 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"error": "not found"}, 404)
         elif p == "/api/settings":
             state.settings.update(self._body())
+            save_settings()
             self._json(state.settings)
         else:
             self._json({"error": "not found"}, 404)
@@ -979,6 +995,7 @@ def main():
         state.serial = None
 
     load_data()
+    load_settings()
 
     state.queue_thread_running = True
 
