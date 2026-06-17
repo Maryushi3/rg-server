@@ -614,18 +614,26 @@ def fill_dynamic(text):
         return " "
     return text
 
-def send_preset(ser, msg, gap_ms=100):
-    """Send a complete preset (may be multiple display commands) with gaps."""
+def preset_frames(msg):
+    """Compute the hex frames for a preset without sending."""
     parts = expand_preset(msg)
-    logs = []
+    frames = []
     for text, font, line, align, x, w, scroll in parts:
         t = fill_dynamic(text)
         if t == "" and text.startswith("__"):
-            t = " "  # fallback if dynamic filler fails
-        frame = make_message(t, font, line, align, x, w, scroll)
+            t = " "
+        frames.append(make_message(t, font, line, align, x, w, scroll))
+    return frames
+
+def send_preset(ser, msg, gap_ms=100, frames=None):
+    """Send a complete preset (may be multiple display commands) with gaps."""
+    if frames is None:
+        frames = preset_frames(msg)
+    logs = []
+    for frame in frames:
         r = send_raw(ser, frame)
         logs.append(r)
-        if len(parts) > 1:
+        if len(frames) > 1:
             time.sleep(gap_ms / 1000.0)
     return "; ".join(logs)
 
@@ -693,9 +701,12 @@ def queue_loop():
         if now - last < dur:
             time.sleep(1)
             continue
-        send_blank(state.serial)
-        time.sleep(0.05)
-        send_preset(state.serial, msg, state.settings.get("preset_gap_ms", 100))
+        frames = preset_frames(msg)
+        if frames != getattr(state, 'last_frames', None):
+            send_blank(state.serial)
+            time.sleep(0.05)
+        send_preset(state.serial, msg, state.settings.get("preset_gap_ms", 100), frames)
+        state.last_frames = frames
         state.last_display = now
         state.queue_pos += 1
 
@@ -745,6 +756,7 @@ class Handler(BaseHTTPRequestHandler):
                 "queue_position": state.queue_pos,
                 "messages_count": len(state.messages),
                 "override_active": state.override.get("active", False),
+                "override_message": state.override.get("message", {}),
                 "time_synced": getattr(state, '_synced_time', 0) > 0,
                 "settings": state.settings,
             })

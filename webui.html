@@ -110,28 +110,37 @@ form input:focus,form select:focus,form textarea:focus{outline:none;border-color
 </div>
 
 <!-- Override -->
-<div class="section hidden">
-  <div class="section-title">Override</div>
-  <form onsubmit="sendOverride();return false">
-    <label>Preset
-      <select id="ov-preset" onchange="onOvPresetChange()">
+<div class="section" id="override-section">
+  <div class="section-title">Override <span id="ov-badge" style="display:none;color:#e33;font-size:.75rem;font-weight:normal">(active)</span></div>
+  <div id="ov-form">
+    <form onsubmit="sendOverride();return false">
+      <label>Preset
+        <select id="ov-preset" onchange="onOvPresetChange()">
           <option value="single-static">Custom</option>
           <option value="scrolling">Scrolling</option>
           <option value="two-static">Two Static Lines</option>
           <option value="top-bottom-scroll">Top Static / Bottom Scroll</option>
+          <option value="bus">Bus</option>
+          <option value="train">Train</option>
           <option value="clock">Clock</option>
           <option value="imieniny">Imieniny</option>
-        </select>
-      </label>
-    <div id="ov-fields"></div>
-    <div class="row">
-      <label>Expires (sec, 0=forever) <input id="ov-expires" type="number" value="0" min="0"></label>
-    </div>
-    <div style="margin-top:8px;display:flex;gap:6px">
-      <button type="submit" class="btn btn-primary">Send</button>
-      <button type="button" class="btn btn-danger" onclick="cancelOverride()">Cancel</button>
-    </div>
-  </form>
+          </select>
+        </label>
+      <div id="ov-fields"></div>
+      <div class="row">
+        <label>Expires (sec, 0=forever) <input id="ov-expires" type="number" value="0" min="0"></label>
+      </div>
+      <div style="margin-top:8px;display:flex;gap:6px">
+        <button type="submit" class="btn btn-primary">Send</button>
+        <button type="button" class="btn btn-danger" onclick="cancelOverride()">Cancel</button>
+      </div>
+    </form>
+  </div>
+  <div id="ov-active" style="display:none">
+    <p style="color:#e33;font-weight:bold;margin-bottom:6px">Override active — queue paused</p>
+    <div id="ov-active-detail" style="color:#888;font-size:.85rem;margin-bottom:8px"></div>
+    <button type="button" class="btn btn-danger" onclick="cancelOverride()">Stop Override</button>
+  </div>
 </div>
 
 <script>
@@ -164,7 +173,7 @@ const PRESET_FIELDS = {
       <label>Align ${namedSelect('f-align', ALIGN_OPTS, 1)}</label>
     </div>`,
   'scrolling': () => `
-    <label>Text <textarea id="f-text" rows="2" placeholder="Scrolling text"></textarea></label>
+    <label>Text <input id="f-text" placeholder="Scrolling text"></label>
     <label>Scroll count <input id="f-scroll" type="number" value="99" min="1" max="99"></label>
     <div class="row">
       <label>Font ${namedSelect('f-font', FONT_OPTS, 1)}</label>
@@ -191,7 +200,7 @@ const PRESET_FIELDS = {
       <label>Destination <input id="f-name" placeholder="e.g. CENTRUM"></label>
     </div>
     <div class="row">
-      <label>Scrolling route <textarea id="f-scroll" rows="1" placeholder="Trasa: ... (optional)"></textarea></label>
+      <label>Scrolling route <input id="f-scroll" placeholder="Trasa: ... (optional)"></label>
       <label>Scroll loops <input id="f-scrollcount" type="number" value="99" min="1" max="99"></label>
     </div>`,
   'train': () => {
@@ -219,7 +228,7 @@ const PRESET_FIELDS = {
     return `
     <label>Top Line <input id="f-text" placeholder="Static text"></label>
     <label>Font ${fopts('top')}</label>
-    <label>Bottom Line (scrolling) <textarea id="f-tbs-bottom" rows="2" placeholder="Scrolling text"></textarea></label>
+    <label>Bottom Line (scrolling) <input id="f-tbs-bottom" placeholder="Scrolling text"></label>
     <label>Font ${fopts('bottom')}  Scroll count <input id="f-tbs-scroll" type="number" value="99" min="1" max="99" style="width:80px"></label>`;
   },
 };
@@ -233,7 +242,12 @@ const OV_FIELDS = {
     </div>`,
   'scrolling': () => `
     <label>Text <input id="ov-text" placeholder="Scrolling text"></label>
-    <label>Scroll count <input id="ov-scroll" type="number" value="99" min="1" max="99"></label>`,
+    <label>Scroll count <input id="ov-scroll" type="number" value="99" min="1" max="99"></label>
+    <div class="row">
+      <label>Font ${namedSelect('ov-font', FONT_OPTS, 1)}</label>
+      <label>Line ${namedSelect('ov-line', LINE_OPTS, 0)}</label>
+      <label>Align ${namedSelect('ov-align', ALIGN_OPTS, 1)}</label>
+    </div>`,
   'two-static': () => {
     const fopts = (n,d) => `<select id="ov-ts-font${n}" style="width:auto">${[[1,'Thin'],[2,'Thick']].map(([v,l]) => `<option value="${v}"${v==d?' selected':''}>${l}</option>`).join('')}</select>`;
     const aopts = (n,d) => `<select id="ov-ts-align${n}" style="width:auto">${[[0,'Left'],[1,'Center'],[2,'Right']].map(([v,l]) => `<option value="${v}"${v==d?' selected':''}>${l}</option>`).join('')}</select>`;
@@ -247,15 +261,44 @@ const OV_FIELDS = {
       <label>Font ${fopts(2,1)} Align ${aopts(2,0)}</label>
     </div>`;
   },
+  'bus': () => `
+    <div class="row">
+      <label>Route <input id="ov-text" placeholder="e.g. 190" style="width:60px"></label>
+      <label>Shift <input id="ov-bus-shift" type="number" value="0" style="width:60px" title="Adjust route right bound (pixels)"></label>
+      <label>Destination <input id="ov-name" placeholder="e.g. CENTRUM"></label>
+    </div>
+    <div class="row">
+      <label>Scrolling route <input id="ov-scroll" placeholder="Trasa: ... (optional)"></label>
+      <label>Scroll loops <input id="ov-scrollcount" type="number" value="99" min="1" max="99"></label>
+    </div>`,
+  'train': () => {
+    const fopts = (sel,def) => `<select id="ov-train-font-${sel}" style="width:auto">${[[1,'Thin'],[2,'Thick']].map(([v,l]) => `<option value="${v}"${v==def?' selected':''}>${l}</option>`).join('')}</select>`;
+    const aopts = (sel,def) => `<select id="ov-train-align-${sel}" style="width:auto">${[[0,'Left'],[1,'Center'],[2,'Right']].map(([v,l]) => `<option value="${v}"${v==def?' selected':''}>${l}</option>`).join('')}</select>`;
+    return `
+    <div class="row">
+      <label>From <input id="ov-text" placeholder="e.g. Warszawa Wsch.-"></label>
+      <label>To <input id="ov-train-to" placeholder="e.g. -Berlin Gesund."></label>
+    </div>
+    <div class="row">
+      <label>Font ${fopts('from',1)} Align ${aopts('from',0)}</label>
+      <label>Font ${fopts('to',1)} Align ${aopts('to',2)}</label>
+    </div>
+    <label>Train # <input id="ov-name" type="number" placeholder="e.g. 271" min="1" style="width:80px">
+      Shift <input id="ov-train-shift" type="number" value="0" style="width:60px" title="Adjust number position (pixels)"></label>`;
+  },
   'clock': () => `
     <p style="color:#888;font-size:.85rem">Time (font 3, left) + date (font 1, right) + weekday (font 1).</p>`,
   'imieniny': () => `
     <p style="color:#888;font-size:.85rem">Top: "IMIENINY" (font 2, centered). Bottom: scrolling names.</p>
     <label>Scroll count <input id="ov-imieniny-scroll" type="number" value="99"></label>`,
-  'top-bottom-scroll': () => `
+  'top-bottom-scroll': () => {
+    const fopts = (n) => `<select id="ov-tbs-font-${n}" style="width:auto">${[[1,'Thin'],[2,'Thick']].map(([v,l]) => `<option value="${v}"${v==1?' selected':''}>${l}</option>`).join('')}</select>`;
+    return `
     <label>Top <input id="ov-text" placeholder="Static"></label>
+    <label>Font ${fopts('top')}</label>
     <label>Bottom scroll <input id="ov-tbs-bottom" placeholder="Scrolling text"></label>
-    <label>Scroll count <input id="ov-tbs-scroll" type="number" value="99"></label>`,
+    <label>Font ${fopts('bottom')}  Scroll count <input id="ov-tbs-scroll" type="number" value="99"></label>`;
+  },
 };
 
 function onPresetChange() {
@@ -382,8 +425,8 @@ async function sendOverride() {
     const f = readForm('ov');
     Object.assign(msg, {text: f.text, font: f.font, line: f.line, alignment: f.alignment, scroll:0});
   } else if(preset === 'scrolling') {
-    msg.text = $('ov-text')?.value||'';
-    msg.font = 1; msg.line = 0; msg.alignment = 1; msg.scroll = parseInt($('ov-scroll')?.value)||99;
+    const f = readForm('ov');
+    Object.assign(msg, {text: f.text, font: f.font, line: f.line, alignment: f.alignment, scroll: parseInt($('ov-scroll')?.value)||99});
   } else if(preset === 'two-static') {
     const t1 = $('ov-text')?.value||'';
     const t2 = $('ov-text2')?.value||'';
@@ -393,11 +436,30 @@ async function sendOverride() {
     msg._ts_font2 = parseInt($('ov-ts-font2')?.value)||1;
     msg._ts_align2 = parseInt($('ov-ts-align2')?.value)||0;
     msg.line = 0;
+  } else if(preset === 'bus') {
+    msg.text = $('ov-text')?.value||'';
+    msg.name = $('ov-name')?.value||'';
+    msg._scroll = $('ov-scroll')?.value||'';
+    msg.scroll = parseInt($('ov-scrollcount')?.value)||99;
+    msg._bus_shift = parseInt($('ov-bus-shift')?.value)||0;
+    msg.font = 3; msg.line = 0; msg.alignment = 0;
+  } else if(preset === 'train') {
+    msg.text = $('ov-text')?.value||'';
+    msg.name = $('ov-name')?.value||'';
+    msg._train_to = $('ov-train-to')?.value||'';
+    msg._train_font_from = parseInt($('ov-train-font-from')?.value)||1;
+    msg._train_font_to = parseInt($('ov-train-font-to')?.value)||1;
+    msg._train_align_from = parseInt($('ov-train-align-from')?.value)||0;
+    msg._train_align_to = parseInt($('ov-train-align-to')?.value)||0;
+    msg._train_shift = parseInt($('ov-train-shift')?.value)||0;
+    msg.font = 1; msg.line = 0; msg.alignment = 0;
   } else if(preset === 'top-bottom-scroll') {
     msg.text = $('ov-text')?.value||'';
     msg._tbs_bottom = $('ov-tbs-bottom')?.value||'';
     msg._tbs_scroll = parseInt($('ov-tbs-scroll')?.value)||99;
-    msg._tbs_font_top = 1; msg._tbs_font_bottom = 1; msg.font = 1; msg.line = 0; msg.alignment = 1; msg.scroll = 0;
+    msg._tbs_font_top = parseInt($('ov-tbs-font-top')?.value)||1;
+    msg._tbs_font_bottom = parseInt($('ov-tbs-font-bottom')?.value)||1;
+    msg.font = 1; msg.line = 0; msg.alignment = 1; msg.scroll = 0;
   } else if(preset === 'clock') {
     msg.text = ''; msg.font = 3; msg.line = 0; msg.alignment = 0; msg.scroll = 0;
   } else if(preset === 'imieniny') {
@@ -405,6 +467,7 @@ async function sendOverride() {
     msg._imieniny_scroll = parseInt($('ov-imieniny-scroll')?.value)||99;
   }
   await api('POST', '/api/override', {active:true, message:msg, expires_at: expires ? Math.floor(Date.now()/1000)+expires : 0});
+  loadStatus();
 }
 async function syncTime() {
   const sec = Math.floor(Date.now() / 1000);
@@ -413,6 +476,7 @@ async function syncTime() {
 }
 async function cancelOverride() {
   await api('POST','/api/cancel-override');
+  loadStatus();
 }
 async function skipTo(id) {
   await api('POST', `/api/skip-to-message?id=${encodeURIComponent(id)}`);
@@ -428,6 +492,17 @@ async function loadStatus() {
   $('s-pos').textContent = `${d.queue_position} / ${d.messages_count}`;
   $('s-msgs').textContent = d.override_active ? 'OVERRIDE' : (d.messages_count + ' queued');
   $('s-msgs').className = 'stat-val ' + (d.override_active ? 'flash' : '');
+  // Override section state
+  if (d.override_active) {
+    $('ov-badge').style.display = 'inline';
+    $('ov-form').style.display = 'none';
+    $('ov-active').style.display = 'block';
+    $('ov-active-detail').textContent = 'Preset: ' + (d.override_message?.preset_id || 'unknown');
+  } else {
+    $('ov-badge').style.display = 'none';
+    $('ov-form').style.display = 'block';
+    $('ov-active').style.display = 'none';
+  }
 }
 function loadSettings() {
   api('GET','/api/settings').then(d => {
