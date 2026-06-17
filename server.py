@@ -8,6 +8,8 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 from functools import partial
 
+DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "messages.json")
+
 # ---- Clock Data (mirrors clock.hpp) ----
 MONTH_PL = ["sty","lut","mar","kwi","maj","cze","lip","sie","wrz","paź","lis","gru"]
 NAMEDAYS = [
@@ -406,6 +408,20 @@ class State:
 
 state = State()
 
+def save_data():
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump({"messages": state.messages}, f, ensure_ascii=False, indent=2)
+
+def load_data():
+    if os.path.exists(DATA_FILE):
+        try:
+            with open(DATA_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            state.messages = data.get("messages", [])
+            print(f"Loaded {len(state.messages)} messages from {DATA_FILE}")
+        except Exception as e:
+            print(f"Failed to load {DATA_FILE}: {e}")
+
 def queue_loop():
     while state.queue_thread_running:
         if not state.settings["queue_running"] or state.override.get("active"):
@@ -421,14 +437,17 @@ def queue_loop():
         if msg.get("hidden"):
             state.queue_pos += 1
             continue
-        # Between messages: blank first
+        now = time.time()
+        dur = msg.get("duration_sec", 30)
+        last = getattr(state, 'last_display', 0)
+        if now - last < dur:
+            time.sleep(1)
+            continue
         send_blank(state.serial)
         time.sleep(0.05)
         send_preset(state.serial, msg, state.settings.get("preset_gap_ms", 100))
-        state.last_display = time.time()
-        dur = msg.get("duration_sec", 30)
+        state.last_display = now
         state.queue_pos += 1
-        time.sleep(dur)
 
 # ---- HTTP ----
 class Handler(BaseHTTPRequestHandler):
@@ -495,6 +514,7 @@ class Handler(BaseHTTPRequestHandler):
             if not msg.get("id"):
                 msg["id"] = state.next_id()
             state.messages.append(msg)
+            save_data()
             self._json(msg, 201)
         elif p == "/api/test":
             r = send_preset(state.serial, {"text": f"TEST {state.settings['display_number']}",
@@ -522,6 +542,7 @@ class Handler(BaseHTTPRequestHandler):
             ids = b.get("ids", [])
             lookup = {m.get("id"): m for m in state.messages}
             state.messages = [lookup[i] for i in ids if i in lookup]
+            save_data()
             self._json({"ok": True})
         elif p == "/api/time":
             b = self._body()
@@ -540,7 +561,8 @@ class Handler(BaseHTTPRequestHandler):
             for i, m in enumerate(state.messages):
                 if m.get("id") == mid:
                     state.override = {"active": False, "message": {}, "expires_at": 0}
-                    state.queue_pos = i
+                    state.queue_pos = i + 1
+                    state.last_display = time.time()
                     send_blank(state.serial)
                     time.sleep(0.05)
                     send_preset(state.serial, m, state.settings.get("preset_gap_ms", 100))
@@ -561,6 +583,7 @@ class Handler(BaseHTTPRequestHandler):
                 if m.get("id") == mid:
                     b["id"] = mid
                     state.messages[i] = b
+                    save_data()
                     return self._json(b)
             self._json({"error": "not found"}, 404)
         elif p == "/api/settings":
@@ -577,6 +600,7 @@ class Handler(BaseHTTPRequestHandler):
             if not mid:
                 return self._json({"error": "missing id"}, 400)
             state.messages = [m for m in state.messages if m.get("id") != mid]
+            save_data()
             self._json({"ok": True})
         else:
             self._json({"error": "not found"}, 404)
@@ -597,6 +621,8 @@ def main():
         print(f"No serial ({e}) — SIMULATION MODE")
         state.serial = None
 
+    load_data()
+
     html = load_html()
     print(f"WebUI loaded ({len(html)} bytes)")
 
@@ -612,6 +638,7 @@ def main():
         pass
     finally:
         state.queue_thread_running = False
+        save_data()
         if state.serial:
             state.serial.close()
         srv.server_close()
