@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>RG Display Controller</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#111;color:#eee;min-height:100vh;padding:0 16px 60px;max-width:900px;margin:0 auto}
+h2{margin:16px 0 8px;color:#e94;font-size:1.1rem}
+.card{background:#1a1a2e;border:1px solid #333;border-radius:8px;padding:12px;margin-bottom:6px}
+.card:hover{border-color:#555}
+.card-title{font-weight:600;font-size:.95rem}
+.card-sub{color:#888;font-size:.8rem;margin-top:2px}
+.card-actions{display:flex;gap:6px;margin-top:6px;align-items:center}
+button,.btn{padding:7px 14px;border:none;border-radius:6px;cursor:pointer;font-size:.82rem;transition:.15s}
+.btn-primary{background:#e94;color:#fff}
+.btn-primary:hover{background:#d83}
+.btn-danger{background:#c33;color:#fff}.btn-danger:hover{background:#b22}
+.btn-secondary{background:#444;color:#eee}.btn-secondary:hover{background:#555}
+.btn-sm{padding:3px 8px;font-size:.75rem}
+.btn-icon{background:none;border:none;color:#888;cursor:pointer;padding:1px 5px;font-size:1rem}
+.btn-icon:hover{color:#e94}
+.btn-link{background:none;border:none;color:#e94;cursor:pointer;padding:0;font-size:inherit;text-decoration:underline}
+form label{display:block;margin:6px 0 2px;color:#aaa;font-size:.8rem}
+form input,form select,form textarea{width:100%;padding:7px;background:#222;border:1px solid #444;border-radius:4px;color:#eee;font-size:.88rem}
+form textarea{font-family:monospace;resize:vertical}
+form input:focus,form select:focus,form textarea:focus{outline:none;border-color:#e94}
+.hidden{display:none!important}
+.row{display:flex;gap:10px}.row>*{flex:1}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.stat{padding:6px 10px;background:#222;border-radius:4px}
+.stat-label{color:#888;font-size:.75rem}
+.stat-val{font-size:.95rem;font-weight:600;margin-top:1px}
+.stat-val.ok{color:#4c4}.stat-val.warn{color:#e94}
+.flash{color:#e94;font-weight:bold;animation:blink .8s infinite}
+@keyframes blink{50%{opacity:0}}
+.empty{text-align:center;color:#555;padding:20px;font-size:.85rem}
+.gap{margin-top:12px}
+.section{border:1px solid #333;border-radius:8px;padding:12px;margin-bottom:10px;background:#151525;overflow:hidden}
+.section-title{color:#e94;font-size:.95rem;font-weight:600;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+</style>
+</head>
+<body>
+
+<h2>RG Display</h2>
+
+<!-- Status -->
+<div class="grid" id="status-grid">
+  <div class="stat"><div class="stat-label">Display</div><div class="stat-val" id="s-display">—</div></div>
+  <div class="stat"><div class="stat-label">Queue</div><div class="stat-val" id="s-queue">—</div></div>
+  <div class="stat"><div class="stat-label">Position</div><div class="stat-val" id="s-pos">—</div></div>
+  <div class="stat"><div class="stat-label">Messages</div><div class="stat-val" id="s-msgs">—</div></div>
+</div>
+<div style="margin:8px 0;display:flex;gap:6px;flex-wrap:wrap">
+  <button class="btn btn-primary" onclick="testDisplay()">Test</button>
+  <button class="btn btn-secondary" onclick="fetch('/api/clear',{method:'POST'}).then(()=>loadStatus())">Clear</button>
+  <button class="btn btn-secondary" onclick="syncTime()">Sync Time</button>
+  <button class="btn btn-secondary" onclick="toggleSettings()">Settings</button>
+</div>
+
+<!-- Settings (collapsible) -->
+<div id="settings-panel" class="section hidden">
+  <div class="section-title">Settings</div>
+  <form onsubmit="saveSettings();return false">
+    <label>Display Number <input id="s-display-num" type="number" value="29" min="1" max="31"></label>
+    <label>Preset Gap (ms) <input id="s-gap" type="number" value="100" min="10" max="1000"></label>
+    <label>Keepalive (sec) <input id="s-keepalive" type="number" value="60" min="5" max="300"></label>
+    <label><input id="s-queue-running" type="checkbox" checked> Queue running</label>
+    <button type="submit" class="btn btn-primary gap">Save</button>
+  </form>
+</div>
+
+<!-- Messages -->
+<div class="section">
+  <div class="section-title">
+    <span>Messages <span style="color:#888;font-size:.8rem" id="msg-count">(0)</span></span>
+    <button class="btn btn-sm btn-primary" onclick="showMsgEditor()">+ Add</button>
+  </div>
+  <div id="msg-list"></div>
+
+  <!-- Message editor -->
+  <div id="msg-editor" class="hidden">
+    <form onsubmit="saveMessage();return false">
+      <div class="row">
+        <label>Preset
+          <select id="f-preset" onchange="onPresetChange()">
+            <option value="single-static">Custom</option>
+            <option value="scrolling">Scrolling</option>
+            <option value="two-static">Two Static Lines</option>
+            <option value="top-bottom-scroll">Top Static / Bottom Scroll</option>
+            <option value="bus">Bus</option>
+            <option value="train">Train</option>
+            <option value="clock">Clock</option>
+            <option value="imieniny">Imieniny</option>
+          </select>
+        </label>
+      </div>
+      <div id="preset-fields"></div>
+      <div class="row">
+        <label>Duration (sec) <input id="f-duration" type="number" value="30" min="1"></label>
+        <label><input id="f-persistent" type="checkbox" checked style="width:auto;margin-top:16px"> Persistent</label>
+      </div>
+      <div style="margin-top:8px;display:flex;gap:6px">
+        <button type="submit" class="btn btn-primary">Save</button>
+        <button type="button" class="btn btn-secondary" onclick="closeMsgEditor()">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Override -->
+<div class="section hidden">
+  <div class="section-title">Override</div>
+  <form onsubmit="sendOverride();return false">
+    <label>Preset
+      <select id="ov-preset" onchange="onOvPresetChange()">
+          <option value="single-static">Custom</option>
+          <option value="scrolling">Scrolling</option>
+          <option value="two-static">Two Static Lines</option>
+          <option value="top-bottom-scroll">Top Static / Bottom Scroll</option>
+          <option value="clock">Clock</option>
+          <option value="imieniny">Imieniny</option>
+        </select>
+      </label>
+    <div id="ov-fields"></div>
+    <div class="row">
+      <label>Expires (sec, 0=forever) <input id="ov-expires" type="number" value="0" min="0"></label>
+    </div>
+    <div style="margin-top:8px;display:flex;gap:6px">
+      <button type="submit" class="btn btn-primary">Send</button>
+      <button type="button" class="btn btn-danger" onclick="cancelOverride()">Cancel</button>
+    </div>
+  </form>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const api = (method, path, body) => {
+  const opt = {method, headers:{'Content-Type':'application/json'}};
+  if(body) opt.body = JSON.stringify(body);
+  return fetch(path, opt).then(r => r.json());
+};
+
+// ---- Font/Line/Align named options ----
+const FONT_OPTS = [
+  [1, 'Small'], [2, 'Bold'], [3, 'Bold Two-Line'],
+  [4, 'Thin Two-Line Digits'], [5, 'Tall Two-Line Digits']
+];
+const LINE_OPTS = [[0, 'Top'], [1, 'Bottom']];
+const ALIGN_OPTS = [[0, 'Left'], [1, 'Center'], [2, 'Right']];
+
+function namedSelect(name, opts, sel) {
+  return `<select id="${name}">${opts.map(([v,l]) => `<option value="${v}"${v==sel?' selected':''}>${l}</option>`).join('')}</select>`;
+}
+
+// ---- Preset field generators ----
+const PRESET_FIELDS = {
+  'single-static': () => `
+    <label>Text <input id="f-text" placeholder="Text"></label>
+    <div class="row">
+      <label>Font ${namedSelect('f-font', FONT_OPTS, 3)}</label>
+      <label>Line ${namedSelect('f-line', LINE_OPTS, 0)}</label>
+      <label>Align ${namedSelect('f-align', ALIGN_OPTS, 1)}</label>
+    </div>`,
+  'scrolling': () => `
+    <label>Text <textarea id="f-text" rows="2" placeholder="Scrolling text"></textarea></label>
+    <label>Scroll count <input id="f-scroll" type="number" value="99" min="1" max="99"></label>
+    <div class="row">
+      <label>Font ${namedSelect('f-font', FONT_OPTS, 1)}</label>
+      <label>Line ${namedSelect('f-line', LINE_OPTS, 0)}</label>
+      <label>Align ${namedSelect('f-align', ALIGN_OPTS, 1)}</label>
+    </div>`,
+  'two-static': () => `
+    <label>Line 1 <input id="f-text" placeholder="Top line text"></label>
+    <label>Line 2 <input id="f-text2" placeholder="Bottom line text"></label>`,
+  'bus': () => `
+    <div class="row">
+      <label>Route <input id="f-text" placeholder="e.g. 190" style="width:60px"></label>
+      <label>Shift <input id="f-bus-shift" type="number" value="0" style="width:60px" title="Adjust route right bound (pixels)"></label>
+      <label>Destination <input id="f-name" placeholder="e.g. CENTRUM"></label>
+    </div>
+    <div class="row">
+      <label>Scrolling route <textarea id="f-scroll" rows="1" placeholder="Trasa: ... (optional)"></textarea></label>
+      <label>Scroll loops <input id="f-scrollcount" type="number" value="99" min="1" max="99"></label>
+    </div>`,
+  'train': () => {
+    const fopts = (sel,def) => `<select id="f-train-font-${sel}" style="width:auto">${[[1,'Thin'],[2,'Thick']].map(([v,l]) => `<option value="${v}"${v==def?' selected':''}>${l}</option>`).join('')}</select>`;
+    const aopts = (sel,def) => `<select id="f-train-align-${sel}" style="width:auto">${[[0,'Left'],[1,'Center'],[2,'Right']].map(([v,l]) => `<option value="${v}"${v==def?' selected':''}>${l}</option>`).join('')}</select>`;
+    return `
+    <div class="row">
+      <label>From <input id="f-text" placeholder="e.g. Warszawa Wsch.-"></label>
+      <label>To <input id="f-train-to" placeholder="e.g. -Berlin Gesund."></label>
+    </div>
+    <div class="row">
+      <label>Font ${fopts('from',1)} Align ${aopts('from',0)}</label>
+      <label>Font ${fopts('to',1)} Align ${aopts('to',2)}</label>
+    </div>
+    <label>Train # <input id="f-name" type="number" placeholder="e.g. 271" min="1" style="width:80px">
+      Shift <input id="f-train-shift" type="number" value="0" style="width:60px" title="Adjust number position (pixels)"></label>`;
+  },
+  'clock': () => `
+    <p style="color:#888;font-size:.85rem">Time (font 3, left) + date (font 1, right) + optional nameday scroll.</p>
+    <label><input id="f-clock-namedays" type="checkbox" checked> Show namedays</label>
+    <label>Scroll count <input id="f-clock-scroll" type="number" value="99" min="1" max="99" style="width:80px"></label>`,
+  'imieniny': () => `
+    <p style="color:#888;font-size:.85rem">Top: "IMIENINY" (font 2, centered). Bottom: scrolling names.</p>
+    <label>Scroll count <input id="f-imieniny-scroll" type="number" value="99" min="1" max="99" style="width:80px"></label>`,
+  'top-bottom-scroll': () => {
+    const fopts = (n) => `<select id="f-tbs-font-${n}" style="width:auto">${[[1,'Thin'],[2,'Thick']].map(([v,l]) => `<option value="${v}"${v==1?' selected':''}>${l}</option>`).join('')}</select>`;
+    return `
+    <label>Top Line <input id="f-text" placeholder="Static text"></label>
+    <label>Font ${fopts('top')}</label>
+    <label>Bottom Line (scrolling) <textarea id="f-tbs-bottom" rows="2" placeholder="Scrolling text"></textarea></label>
+    <label>Font ${fopts('bottom')}  Scroll count <input id="f-tbs-scroll" type="number" value="99" min="1" max="99" style="width:80px"></label>`;
+  },
+};
+const OV_FIELDS = {
+  'single-static': () => `
+    <label>Text <input id="ov-text" placeholder="Text"></label>
+    <div class="row">
+      <label>Font ${namedSelect('ov-font', FONT_OPTS, 3)}</label>
+      <label>Line ${namedSelect('ov-line', LINE_OPTS, 0)}</label>
+      <label>Align ${namedSelect('ov-align', ALIGN_OPTS, 1)}</label>
+    </div>`,
+  'scrolling': () => `
+    <label>Text <input id="ov-text" placeholder="Scrolling text"></label>
+    <label>Scroll count <input id="ov-scroll" type="number" value="99" min="1" max="99"></label>`,
+  'two-static': () => `
+    <label>Line 1 <input id="ov-text" placeholder="Top line text"></label>
+    <label>Line 2 <input id="ov-text2" placeholder="Bottom line text"></label>`,
+  'clock': () => `
+    <p style="color:#888;font-size:.85rem">Time (font 3, left) + date (font 1, right).</p>
+    <label><input id="ov-clock-namedays" type="checkbox" checked> Show namedays</label>
+    <label>Scroll count <input id="ov-clock-scroll" type="number" value="99"></label>`,
+  'imieniny': () => `
+    <p style="color:#888;font-size:.85rem">Top: "IMIENINY" (font 2, centered). Bottom: scrolling names.</p>
+    <label>Scroll count <input id="ov-imieniny-scroll" type="number" value="99"></label>`,
+  'top-bottom-scroll': () => `
+    <label>Top <input id="ov-text" placeholder="Static"></label>
+    <label>Bottom scroll <input id="ov-tbs-bottom" placeholder="Scrolling text"></label>
+    <label>Scroll count <input id="ov-tbs-scroll" type="number" value="99"></label>`,
+};
+
+function onPresetChange() {
+  $('preset-fields').innerHTML = (PRESET_FIELDS[$('f-preset').value] || PRESET_FIELDS['single-static'])();
+}
+function onOvPresetChange() {
+  $('ov-fields').innerHTML = (OV_FIELDS[$('ov-preset').value] || OV_FIELDS['single-static'])();
+}
+onPresetChange();
+onOvPresetChange();
+
+// ---- Message editor ----
+let editingId = null;
+function showMsgEditor(msg) {
+  editingId = msg ? msg.id : null;
+  $('msg-editor').classList.remove('hidden');
+  $('f-preset').value = msg ? (msg.preset_id||'single-static') : 'single-static';
+  onPresetChange();
+  if(msg) setTimeout(() => fillMsgFields(msg), 50);
+}
+function fillMsgFields(msg) {
+  const p = msg.preset_id;
+  if($('f-text')) $('f-text').value = msg.text||'';
+  if($('f-text2')) $('f-text2').value = msg.text&&msg.text.includes('||') ? msg.text.split('||')[1]||'' : '';
+  if($('f-name')) $('f-name').value = (p==='bus'||p==='train') ? (msg.name||'') : '';
+  if($('f-train-to')) $('f-train-to').value = msg._train_to||'';
+  if($('f-train-font-from')) $('f-train-font-from').value = msg._train_font_from||1;
+  if($('f-train-font-to')) $('f-train-font-to').value = msg._train_font_to||1;
+  if($('f-train-align-from')) $('f-train-align-from').value = msg._train_align_from||0;
+  if($('f-train-align-to')) $('f-train-align-to').value = msg._train_align_to||0;
+  if($('f-bus-shift')) $('f-bus-shift').value = msg._bus_shift||0;
+  if($('f-train-shift')) $('f-train-shift').value = msg._train_shift||0;
+  if($('f-tbs-bottom')) $('f-tbs-bottom').value = msg._tbs_bottom||'';
+  if($('f-tbs-font-top')) $('f-tbs-font-top').value = msg._tbs_font_top||1;
+  if($('f-tbs-font-bottom')) $('f-tbs-font-bottom').value = msg._tbs_font_bottom||1;
+  if($('f-tbs-scroll')) $('f-tbs-scroll').value = msg._tbs_scroll||99;
+  if($('f-clock-namedays')) $('f-clock-namedays').checked = msg._clock_namedays !== false;
+  if($('f-clock-scroll')) $('f-clock-scroll').value = msg._clock_scroll||99;
+  if($('f-imieniny-scroll')) $('f-imieniny-scroll').value = msg._imieniny_scroll||99;
+  if($('f-scroll')) $('f-scroll').value = msg._scroll||msg.scroll||'';
+  if($('f-scrollcount')) $('f-scrollcount').value = msg.scroll||99;
+  if($('f-font')) $('f-font').value = msg.font||3;
+  if($('f-line')) $('f-line').value = msg.line||0;
+  if($('f-align')) $('f-align').value = msg.alignment||0;
+  $('f-duration').value = msg.duration_sec||30;
+  $('f-persistent').checked = msg.persistent !== false;
+}
+function closeMsgEditor() {
+  editingId = null;
+  $('msg-editor').classList.add('hidden');
+}
+function readForm(prefix) {
+  const s = (id, def) => {
+    const el = $(id);
+    return el ? el.value : def;
+  };
+  return {
+    text: s(prefix+'-text', ''),
+    name: s(prefix+'-name', ''),
+    _scroll: s(prefix+'-scroll', ''),
+    font: parseInt(s(prefix+'-font', '3'))||3,
+    line: parseInt(s(prefix+'-line', '0'))||0,
+    alignment: parseInt(s(prefix+'-align', '1'))||0,
+    scroll: parseInt(s(prefix+'-scroll', '0'))||0,
+  };
+}
+function collectMsg() {
+  const preset = $('f-preset').value;
+  const base = {
+    id: editingId||'',
+    preset_id: preset,
+    duration_sec: parseInt($('f-duration').value)||30,
+    persistent: $('f-persistent').checked,
+    schedule: {enabled:false,from_ts:0,to_ts:0},
+    pos_x: 0, width: 96,
+  };
+  if(preset === 'single-static' || preset === 'scrolling') {
+    const f = readForm('f');
+    return {...base, text: f.text, font: f.font, line: f.line, alignment: f.alignment, scroll: preset==='scrolling'?f.scroll:0};
+  }
+  if(preset === 'two-static') {
+    const t1 = $('f-text')?.value||'';
+    const t2 = $('f-text2')?.value||'';
+    const text = t1 + (t2 ? '||'+t2 : '');
+    return {...base, text, font:1, line:0, alignment:0};
+  }
+  if(preset === 'bus') return {...base, text: $('f-text')?.value||'', name: $('f-name')?.value||'', _scroll: $('f-scroll')?.value||'', scroll: parseInt($('f-scrollcount')?.value)||99, _bus_shift: parseInt($('f-bus-shift')?.value)||0, font:3, line:0, alignment:0};
+  if(preset === 'train') return {...base, text: $('f-text')?.value||'', name: $('f-name')?.value||'', _train_to: $('f-train-to')?.value||'', _train_font_from: parseInt($('f-train-font-from')?.value)||1, _train_font_to: parseInt($('f-train-font-to')?.value)||1, _train_align_from: parseInt($('f-train-align-from')?.value)||0, _train_align_to: parseInt($('f-train-align-to')?.value)||0, _train_shift: parseInt($('f-train-shift')?.value)||0, font:1, line:0, alignment:0};
+  if(preset === 'top-bottom-scroll') return {...base, text: $('f-text')?.value||'', _tbs_bottom: $('f-tbs-bottom')?.value||'', _tbs_font_top: parseInt($('f-tbs-font-top')?.value)||1, _tbs_font_bottom: parseInt($('f-tbs-font-bottom')?.value)||1, _tbs_scroll: parseInt($('f-tbs-scroll')?.value)||99, font:1, line:0, alignment:0};
+  if(preset === 'clock') return {...base, text:'', name:'', font:3, line:0, alignment:0, _clock_namedays: $('f-clock-namedays')?.checked ?? true, _clock_scroll: parseInt($('f-clock-scroll')?.value)||99};
+  if(preset === 'imieniny') return {...base, text:'', name:'', font:1, line:0, alignment:1, _imieniny_scroll: parseInt($('f-imieniny-scroll')?.value)||99};
+  return {...base, text: $('f-text')?.value||'', font:3, line:0, alignment:1};
+}
+async function saveMessage() {
+  const msg = collectMsg();
+  if(editingId) await api('PUT', `/api/messages?id=${encodeURIComponent(editingId)}`, msg);
+  else await api('POST', '/api/messages', msg);
+  closeMsgEditor();
+  loadMessages();
+}
+function editMessage(id) {
+  api('GET','/api/messages').then(d => {
+    const m = (d.messages||[]).find(x => x.id === id);
+    if(m) showMsgEditor(m);
+  });
+}
+async function deleteMessage(id) {
+  await api('DELETE', `/api/messages?id=${encodeURIComponent(id)}`);
+  loadMessages();
+}
+
+// ---- Override ----
+async function sendOverride() {
+  const preset = $('ov-preset').value;
+  const msg = {preset_id: preset, pos_x:0, width:96};
+  const expires = parseInt($('ov-expires').value)||0;
+  if(preset === 'single-static') {
+    const f = readForm('ov');
+    Object.assign(msg, {text: f.text, font: f.font, line: f.line, alignment: f.alignment, scroll:0});
+  } else if(preset === 'scrolling') {
+    msg.text = $('ov-text')?.value||'';
+    msg.font = 1; msg.line = 0; msg.alignment = 1; msg.scroll = parseInt($('ov-scroll')?.value)||99;
+  } else if(preset === 'two-static') {
+    const t1 = $('ov-text')?.value||'';
+    const t2 = $('ov-text2')?.value||'';
+    msg.text = t1 + (t2 ? '||'+t2 : '');
+    msg.font = 1; msg.line = 0; msg.alignment = 0;
+  } else if(preset === 'top-bottom-scroll') {
+    msg.text = $('ov-text')?.value||'';
+    msg._tbs_bottom = $('ov-tbs-bottom')?.value||'';
+    msg._tbs_scroll = parseInt($('ov-tbs-scroll')?.value)||99;
+    msg._tbs_font_top = 1; msg._tbs_font_bottom = 1; msg.font = 1; msg.line = 0; msg.alignment = 1; msg.scroll = 0;
+  } else if(preset === 'clock') {
+    msg.text = ''; msg.font = 3; msg.line = 0; msg.alignment = 0; msg.scroll = 0;
+    msg._clock_namedays = $('ov-clock-namedays')?.checked ?? true;
+    msg._clock_scroll = parseInt($('ov-clock-scroll')?.value)||99;
+  } else if(preset === 'imieniny') {
+    msg.text = ''; msg.font = 1; msg.line = 0; msg.alignment = 1; msg.scroll = 0;
+    msg._imieniny_scroll = parseInt($('ov-imieniny-scroll')?.value)||99;
+  }
+  await api('POST', '/api/override', {active:true, message:msg, expires_at: expires ? Math.floor(Date.now()/1000)+expires : 0});
+}
+async function syncTime() {
+  const sec = Math.floor(Date.now() / 1000);
+  await api('POST', '/api/time', {unix_seconds: sec});
+  loadStatus();
+}
+async function cancelOverride() {
+  await api('POST','/api/cancel-override');
+}
+async function skipTo(id) {
+  await api('POST', `/api/skip-to-message?id=${encodeURIComponent(id)}`);
+}
+
+// ---- Load functions ----
+async function loadStatus() {
+  const d = await api('GET','/api/status');
+  $('s-display').textContent = d.display_connected ? 'Connected' : 'No RS485';
+  $('s-display').className = 'stat-val ' + (d.display_connected ? 'ok' : 'warn');
+  $('s-queue').textContent = d.queue_running ? 'Running' : 'Paused';
+  $('s-queue').className = 'stat-val ' + (d.queue_running ? 'ok' : 'warn');
+  $('s-pos').textContent = `${d.queue_position} / ${d.messages_count}`;
+  $('s-msgs').textContent = d.override_active ? 'OVERRIDE' : (d.messages_count + ' queued');
+  $('s-msgs').className = 'stat-val ' + (d.override_active ? 'flash' : '');
+}
+function loadSettings() {
+  api('GET','/api/settings').then(d => {
+    $('s-display-num').value = d.display_number;
+    $('s-gap').value = d.preset_gap_ms;
+    $('s-keepalive').value = d.keepalive_sec;
+    $('s-queue-running').checked = d.queue_running;
+  });
+}
+function loadMessages() {
+  api('GET','/api/messages').then(d => {
+    const msgs = d.messages||[];
+    $('msg-count').textContent = `(${msgs.length})`;
+    const list = $('msg-list');
+    if(!msgs.length) {
+      list.innerHTML = '<div class="empty">No messages.</div>';
+      return;
+    }
+    list.innerHTML = msgs.map((m,i) => {
+      const sub = m.preset_id==='clock'?'Clock':
+        m.preset_id==='bus'?(m.name?`${m.text||''} → ${m.name}`:(m.text||'Bus')):
+        m.preset_id==='train'?`${m.text||''} ${m._train_to||''}  #${m.name||''}`:
+        m.preset_id==='top-bottom-scroll'?`${(m.text||'').substring(0,20)} / ${(m._tbs_bottom||'').substring(0,20)}`:
+        m.preset_id==='two-static'?((m.text||'').split('||').filter(Boolean).join(' / ')):
+        m.preset_id==='scrolling'?`Scroll: ${(m.text||'').substring(0,25)}`:
+        m.preset_id==='single-static'?(m.text||'Custom'):
+        (m.text||'').substring(0,35);
+      const label = sub;
+      const pin = m.persistent ? ' <span style="color:#555">\u{1F4CC}</span>' : '';
+      const hidden = m.hidden ? ' <span style="color:#666">(hidden)</span>' : '';
+      const eyeBtn = m.hidden
+        ? '<button class="btn-icon" onclick="toggleHide(\''+m.id+'\')" title="Show">&#128064;</button>'
+        : '<button class="btn-icon" onclick="toggleHide(\''+m.id+'\')" title="Hide">&#128065;</button>';
+      return `<div class="card" draggable="true"
+        ondragstart="dragStart(event,'${m.id}')"
+        ondragover="dragOver(event)"
+        ondrop="dropMsg(event,'${m.id}')"
+        ondragend="dragEnd(event)"
+        style="${m.hidden?'opacity:.4':''}">
+        <div class="card-title"><span style="cursor:grab;margin-right:6px">&#9776;</span>${i+1}. ${label}${pin}${hidden}</div>
+        <div class="card-actions">
+          ${eyeBtn}
+          <button class="btn btn-sm btn-secondary" onclick="skipTo('${m.id}')">Skip</button>
+          <button class="btn btn-sm btn-secondary" onclick="editMessage('${m.id}')">Edit</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteMessage('${m.id}')">Del</button>
+          <span style="flex:1"></span>
+          <span style="color:#888;font-size:.75rem">${m.duration_sec||30}s</span>
+        </div>
+      </div>`;
+    }).join('');
+  });
+}
+let dragId = null;
+function dragStart(e, id) { dragId = id; e.dataTransfer.effectAllowed = 'move'; }
+function dragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; e.target.closest('.card')?.classList.add('drag-over'); }
+function dragEnd(e) { document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over')); }
+function dropMsg(e, id) {
+  e.preventDefault();
+  document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+  if (!dragId || dragId === id) return;
+  api('GET','/api/messages').then(d => {
+    const ids = d.messages.map(m => m.id);
+    const from = ids.indexOf(dragId);
+    const to = ids.indexOf(id);
+    if (from < 0 || to < 0) return;
+    ids.splice(from, 1);
+    ids.splice(to, 0, dragId);
+    api('POST','/api/messages/reorder', {ids}).then(() => loadMessages());
+  });
+}
+async function toggleHide(id) {
+  const d = await api('GET','/api/messages');
+  const m = d.messages.find(x => x.id === id);
+  if (!m) return;
+  m.hidden = !m.hidden;
+  await api('PUT', `/api/messages?id=${encodeURIComponent(id)}`, m);
+  loadMessages();
+}
+async function saveSettings() {
+  await api('PUT', '/api/settings', {
+    display_number: parseInt($('s-display-num').value)||29,
+    preset_gap_ms: parseInt($('s-gap').value)||100,
+    keepalive_sec: parseInt($('s-keepalive').value)||60,
+    queue_running: $('s-queue-running').checked,
+  });
+}
+async function testDisplay() {
+  await api('POST','/api/test');
+  loadStatus();
+}
+function toggleSettings() {
+  $('settings-panel').classList.toggle('hidden');
+}
+function init() {
+  loadStatus(); loadSettings(); loadMessages();
+  setInterval(loadStatus, 3000);
+}
+init();
+</script>
+</body>
+</html>
