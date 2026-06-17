@@ -729,9 +729,7 @@ def queue_loop():
         if msg.get("hidden"):
             state.queue_pos += 1
             continue
-        dur = msg.get("duration_sec", 30)
-        last = getattr(state, 'last_display', 0)
-        if now - last < dur:
+        if now < getattr(state, 'display_until', 0):
             time.sleep(1)
             continue
         frames = preset_frames(msg)
@@ -740,7 +738,7 @@ def queue_loop():
             time.sleep(0.05)
         send_preset(state.serial, msg, state.settings.get("preset_gap_ms", 100), frames)
         state.last_frames = frames
-        state.last_display = now
+        state.display_until = now + msg.get("duration_sec", 30)
         state.queue_pos += 1
 
 # ---- HTTP ----
@@ -860,7 +858,7 @@ class Handler(BaseHTTPRequestHandler):
                 if m.get("id") == mid:
                     state.override = {"active": False, "message": {}, "expires_at": 0}
                     state.queue_pos = i + 1
-                    state.last_display = time.time()
+                    state.display_until = time.time() + m.get("duration_sec", 30)
                     frames = preset_frames(m)
                     send_blank(state.serial)
                     time.sleep(0.05)
