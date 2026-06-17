@@ -171,9 +171,19 @@ const PRESET_FIELDS = {
       <label>Line ${namedSelect('f-line', LINE_OPTS, 0)}</label>
       <label>Align ${namedSelect('f-align', ALIGN_OPTS, 1)}</label>
     </div>`,
-  'two-static': () => `
-    <label>Line 1 <input id="f-text" placeholder="Top line text"></label>
-    <label>Line 2 <input id="f-text2" placeholder="Bottom line text"></label>`,
+  'two-static': () => {
+    const fopts = (n,d) => `<select id="f-ts-font${n}" style="width:auto">${[[1,'Thin'],[2,'Thick']].map(([v,l]) => `<option value="${v}"${v==d?' selected':''}>${l}</option>`).join('')}</select>`;
+    const aopts = (n,d) => `<select id="f-ts-align${n}" style="width:auto">${[[0,'Left'],[1,'Center'],[2,'Right']].map(([v,l]) => `<option value="${v}"${v==d?' selected':''}>${l}</option>`).join('')}</select>`;
+    return `
+    <div class="row">
+      <label>Line 1 <input id="f-text" placeholder="Top line text"></label>
+      <label>Font ${fopts(1,1)} Align ${aopts(1,0)}</label>
+    </div>
+    <div class="row">
+      <label>Line 2 <input id="f-text2" placeholder="Bottom line text"></label>
+      <label>Font ${fopts(2,1)} Align ${aopts(2,0)}</label>
+    </div>`;
+  },
   'bus': () => `
     <div class="row">
       <label>Route <input id="f-text" placeholder="e.g. 190" style="width:60px"></label>
@@ -224,9 +234,19 @@ const OV_FIELDS = {
   'scrolling': () => `
     <label>Text <input id="ov-text" placeholder="Scrolling text"></label>
     <label>Scroll count <input id="ov-scroll" type="number" value="99" min="1" max="99"></label>`,
-  'two-static': () => `
-    <label>Line 1 <input id="ov-text" placeholder="Top line text"></label>
-    <label>Line 2 <input id="ov-text2" placeholder="Bottom line text"></label>`,
+  'two-static': () => {
+    const fopts = (n,d) => `<select id="ov-ts-font${n}" style="width:auto">${[[1,'Thin'],[2,'Thick']].map(([v,l]) => `<option value="${v}"${v==d?' selected':''}>${l}</option>`).join('')}</select>`;
+    const aopts = (n,d) => `<select id="ov-ts-align${n}" style="width:auto">${[[0,'Left'],[1,'Center'],[2,'Right']].map(([v,l]) => `<option value="${v}"${v==d?' selected':''}>${l}</option>`).join('')}</select>`;
+    return `
+    <div class="row">
+      <label>Line 1 <input id="ov-text" placeholder="Top line text"></label>
+      <label>Font ${fopts(1,1)} Align ${aopts(1,0)}</label>
+    </div>
+    <div class="row">
+      <label>Line 2 <input id="ov-text2" placeholder="Bottom line text"></label>
+      <label>Font ${fopts(2,1)} Align ${aopts(2,0)}</label>
+    </div>`;
+  },
   'clock': () => `
     <p style="color:#888;font-size:.85rem">Time (font 3, left) + date (font 1, right) + weekday (font 1).</p>`,
   'imieniny': () => `
@@ -258,7 +278,7 @@ function showMsgEditor(msg) {
 }
 function fillMsgFields(msg) {
   const p = msg.preset_id;
-  if($('f-text')) $('f-text').value = msg.text||'';
+  if($('f-text')) $('f-text').value = msg.text ? msg.text.split('||')[0]||'' : '';
   if($('f-text2')) $('f-text2').value = msg.text&&msg.text.includes('||') ? msg.text.split('||')[1]||'' : '';
   if($('f-name')) $('f-name').value = (p==='bus'||p==='train') ? (msg.name||'') : '';
   if($('f-train-to')) $('f-train-to').value = msg._train_to||'';
@@ -276,6 +296,10 @@ function fillMsgFields(msg) {
   if($('f-scroll')) $('f-scroll').value = msg._scroll||msg.scroll||'';
   if($('f-scrollcount')) $('f-scrollcount').value = msg.scroll||99;
   if($('f-font')) $('f-font').value = msg.font||3;
+  if($('f-ts-font1')) $('f-ts-font1').value = msg.font||1;
+  if($('f-ts-font2')) $('f-ts-font2').value = msg._ts_font2||1;
+  if($('f-ts-align1')) $('f-ts-align1').value = msg.alignment||0;
+  if($('f-ts-align2')) $('f-ts-align2').value = msg._ts_align2||0;
   if($('f-line')) $('f-line').value = msg.line||0;
   if($('f-align')) $('f-align').value = msg.alignment||0;
   $('f-duration').value = msg.duration_sec||30;
@@ -318,7 +342,11 @@ function collectMsg() {
     const t1 = $('f-text')?.value||'';
     const t2 = $('f-text2')?.value||'';
     const text = t1 + (t2 ? '||'+t2 : '');
-    return {...base, text, font:1, line:0, alignment:0};
+    const font1 = parseInt($('f-ts-font1')?.value)||1;
+    const font2 = parseInt($('f-ts-font2')?.value)||1;
+    const align1 = parseInt($('f-ts-align1')?.value)||0;
+    const align2 = parseInt($('f-ts-align2')?.value)||0;
+    return {...base, text, font:font1, line:0, alignment:align1, _ts_font2: font2, _ts_align2: align2};
   }
   if(preset === 'bus') return {...base, text: $('f-text')?.value||'', name: $('f-name')?.value||'', _scroll: $('f-scroll')?.value||'', scroll: parseInt($('f-scrollcount')?.value)||99, _bus_shift: parseInt($('f-bus-shift')?.value)||0, font:3, line:0, alignment:0};
   if(preset === 'train') return {...base, text: $('f-text')?.value||'', name: $('f-name')?.value||'', _train_to: $('f-train-to')?.value||'', _train_font_from: parseInt($('f-train-font-from')?.value)||1, _train_font_to: parseInt($('f-train-font-to')?.value)||1, _train_align_from: parseInt($('f-train-align-from')?.value)||0, _train_align_to: parseInt($('f-train-align-to')?.value)||0, _train_shift: parseInt($('f-train-shift')?.value)||0, font:1, line:0, alignment:0};
@@ -360,7 +388,11 @@ async function sendOverride() {
     const t1 = $('ov-text')?.value||'';
     const t2 = $('ov-text2')?.value||'';
     msg.text = t1 + (t2 ? '||'+t2 : '');
-    msg.font = 1; msg.line = 0; msg.alignment = 0;
+    msg.font = parseInt($('ov-ts-font1')?.value)||1;
+    msg.alignment = parseInt($('ov-ts-align1')?.value)||0;
+    msg._ts_font2 = parseInt($('ov-ts-font2')?.value)||1;
+    msg._ts_align2 = parseInt($('ov-ts-align2')?.value)||0;
+    msg.line = 0;
   } else if(preset === 'top-bottom-scroll') {
     msg.text = $('ov-text')?.value||'';
     msg._tbs_bottom = $('ov-tbs-bottom')?.value||'';

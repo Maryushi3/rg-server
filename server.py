@@ -245,12 +245,15 @@ def expand_preset(msg):
                  msg.get("width", 96), 0)]
 
     elif preset == "two-static":
-        # Text format: "Line1||Line2"
         lines = msg.get("text", "").split("||")
+        f1 = msg.get("font", 1)
+        a1 = msg.get("alignment", 0)
+        f2 = msg.get("_ts_font2", 1)
+        a2 = msg.get("_ts_align2", 0)
         if len(lines) >= 1 and lines[0].strip():
-            parts.append((lines[0].strip(), 1, 0, 0, 0, 96, 0))
+            parts.append((lines[0].strip(), f1, 0, a1, 0, 96, 0))
         if len(lines) >= 2 and lines[1].strip():
-            parts.append((lines[1].strip(), 1, 1, 0, 0, 96, 0))
+            parts.append((lines[1].strip(), f2, 1, a2, 0, 96, 0))
         return parts
 
     elif preset == "bus":
@@ -315,23 +318,21 @@ def expand_preset(msg):
         return parts
 
     elif preset == "clock":
-        # Time (font 3, line 0, left) + date (font 1, line 0, after time) + Polish weekday (line 1)
+        # Time (font 3, line 0, left) + date (font 1, line 0, right) + weekday (font 1, line 1, under date)
         from datetime import datetime
         now = datetime.now()
         time_str = now.strftime("%H:%M")
-        # Pixel widths: '1'=4px, others=6px, ':'=4px, 1px gaps
         time_width = sum(4 if c == '1' else (2 if c == ':' else 6) for c in time_str) + len(time_str) - 1
         shift = msg.get("_clock_shift", 0)
         time_right = max(6, min(60, 2 + time_width + 2 + shift))
         parts.append(("__clock_time__", 3, 0, 0, 2, time_right, 0))
         date_x = time_right + 4
         parts.append(("__clock_date__", 1, 0, 0, date_x, 96, 0))
-        if msg.get("_clock_namedays", True):
-            date_text = short_date(now)
-            weekday_text = weekday_pl(now)
-            f1_pw = lambda t: 4 * len(t)
-            weekday_x = date_x + max(0, (f1_pw(date_text) - f1_pw(weekday_text)) // 2)
-            parts.append(("__clock_weekday__", 1, 1, 0, weekday_x, 96, 0))
+        date_text = short_date(now)
+        weekday_text = weekday_pl(now)
+        f1_pw = lambda t: 4 * len(t)
+        weekday_x = date_x + max(0, (f1_pw(date_text) - f1_pw(weekday_text)) // 2)
+        parts.append(("__clock_weekday__", 1, 1, 0, weekday_x, 96, 0))
         return parts
 
     elif preset == "imieniny":
