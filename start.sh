@@ -22,10 +22,20 @@ detect_devices() {
 
 SERIAL=""
 ARDUINO_SERIAL=""
+RS485_GPIO=""
+
+# Auto-detect Raspberry Pi with built-in UART + MAX485
+if [[ "$(uname -s)" == "Linux" ]] && [[ -e /dev/ttyAMA0 ]]; then
+  if python3 -c "import RPi.GPIO" 2>/dev/null; then
+    echo "Raspberry Pi detected with RPi.GPIO." >&2
+    [[ -z "$SERIAL" ]] && SERIAL="/dev/ttyAMA0" && echo "RS485: $SERIAL (auto)" >&2
+    [[ -z "$RS485_GPIO" ]] && RS485_GPIO="26" && echo "RS485 GPIO: pin $RS485_GPIO (auto)" >&2
+  fi
+fi
 
 # Usage
 usage() {
-  echo "Usage: $0 [--serial /dev/...] [--arduino-serial /dev/...]" >&2
+  echo "Usage: $0 [--serial /dev/...] [--arduino-serial /dev/...] [--rs485-gpio N]" >&2
   exit 1
 }
 
@@ -34,6 +44,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --serial) SERIAL="$2"; shift 2 ;;
     --arduino-serial) ARDUINO_SERIAL="$2"; shift 2 ;;
+    --rs485-gpio) RS485_GPIO="$2"; shift 2 ;;
     *) usage ;;
   esac
 done
@@ -118,4 +129,5 @@ cd "$SCRIPT_DIR"
 ARGS="--port $PORT"
 [[ -n "$SERIAL" ]] && ARGS="$ARGS --serial $SERIAL"
 [[ -n "$ARDUINO_SERIAL" ]] && ARGS="$ARGS --arduino-serial $ARDUINO_SERIAL"
+[[ -n "$RS485_GPIO" ]] && ARGS="$ARGS --rs485-gpio $RS485_GPIO"
 exec python3 server.py $ARGS

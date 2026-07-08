@@ -204,7 +204,7 @@ function renderPresetFields(prefix, preset) {
     'single-static': () => `
       <label>Text <input id="${prefix}-text" placeholder="Text"></label>
       <div class="row">
-        <label>Font ${sel('font', FONT_OPTS, 1)}</label>
+        <label>Font ${sel('font', FONT_OPTS, 1)} <span id="${prefix}-font-warn" style="color:#e33;font-size:.7rem;display:none">(digits only)</span></label>
         <label>Line ${sel('line', LINE_OPTS, 0)}</label>
         <label>Align ${sel('align', ALIGN_OPTS, 1)}</label>
       </div>`,
@@ -212,7 +212,7 @@ function renderPresetFields(prefix, preset) {
       <label>Text <input id="${prefix}-text" placeholder="Scrolling text"></label>
       <label>Scroll count <input id="${prefix}-scroll" type="number" value="99" min="1" max="99"></label>
       <div class="row">
-        <label>Font ${sel('font', FONT_OPTS, 1)}</label>
+        <label>Font ${sel('font', FONT_OPTS, 1)} <span id="${prefix}-font-warn" style="color:#e33;font-size:.7rem;display:none">(digits only)</span></label>
         <label>Line ${sel('line', LINE_OPTS, 0)}</label>
         <label>Align ${sel('align', ALIGN_OPTS, 1)}</label>
       </div>`,
@@ -266,6 +266,12 @@ function onPresetChange(prefix) {
   const preset = $(`${prefix}-preset`).value;
   const container = prefix === 'f' ? 'preset-fields' : `${prefix}-fields`;
   $(container).innerHTML = renderPresetFields(prefix, preset);
+  const fontEl = $(`${prefix}-font`);
+  const warn = $(`${prefix}-font-warn`);
+  if (fontEl && warn) {
+    fontEl.onchange = () => { warn.style.display = (fontEl.value === '4' || fontEl.value === '5') ? 'inline' : 'none'; };
+    fontEl.onchange();
+  }
   if (prefix === 'f') {
     $(container).oninput = validateMsgLength;
     validateMsgLength();

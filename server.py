@@ -4,6 +4,10 @@ RG Display Server — local RS485 controller for R&G LED displays.
 Run: python server.py [--port 8080] [--serial /dev/...]
 """
 import argparse, json, math, os, re, serial, threading, time
+try:
+    import RPi.GPIO as GPIO
+except (ImportError, RuntimeError):
+    GPIO = None
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 from functools import partial
@@ -440,8 +444,8 @@ def make_message(text, font=3, line=0, alignment=1, x=0, w=96, scroll=0):
     xl = hex_char(x % 16)
     wh = hex_char(w // 16)
     wl = hex_char(w % 16)
-    sh = hex_char(scroll // 10)
-    sl = hex_char(scroll % 10)
+    sh = hex_char(scroll // 16)
+    sl = hex_char(scroll % 16)
     ctrl = f"38 30 {lb} {ab} 37 {fb} {xh} {xl} {wh} {wl} {sh} {sl}"
     content = f"{ADDR} {length} {ctrl} {tx}"
     ck = sum(int(v, 16) for v in content.split()) % 256
@@ -450,12 +454,17 @@ def make_message(text, font=3, line=0, alignment=1, x=0, w=96, scroll=0):
     return f"02 {content} {ck_hex} 03"
 
 def send_raw(ser, frame):
-    """Send a hex frame string over RS485 (auto-direction dongle, no RTS)."""
+    """Send a hex frame string over RS485. Toggles MAX485 direction GPIO if configured."""
     if not ser:
         return f"SIM: {frame[:60]}... ({len(frame)} chars)"
     data = bytes.fromhex(frame)
+    gpio_pin = getattr(state, 'rs485_gpio', None)
+    if gpio_pin is not None:
+        GPIO.output(gpio_pin, True)
     ser.write(data)
     ser.flush()
+    if gpio_pin is not None:
+        GPIO.output(gpio_pin, False)
     return f"TX: {frame[:60]}..."
 
 def clear_screen(ser, addr="37 37"):
@@ -980,8 +989,9 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", default=8080, type=int)
-    ap.add_argument("--serial", default="/dev/cu.usbmodem5A7E0300181")
+    ap.add_argument("--serial", default="/dev/ttyAMA0")
     ap.add_argument("--arduino-serial", default=None, help="Serial port for DHT22 Arduino")
+    ap.add_argument("--rs485-gpio", type=int, default=None, help="BCM GPIO pin tied to MAX485 RE+DE for direction control")
     args = ap.parse_args()
 
     try:
@@ -993,6 +1003,15 @@ def main():
     except Exception as e:
         print(f"No serial ({e}) — SIMULATION MODE")
         state.serial = None
+
+    if args.rs485_gpio is not None:
+        if GPIO is not None:
+            GPIO.setmode(GPIO.BCM)
+            GPIO.setup(args.rs485_gpio, GPIO.OUT, initial=GPIO.LOW)
+            state.rs485_gpio = args.rs485_gpio
+            print(f"RS485 GPIO direction on pin {args.rs485_gpio}")
+        else:
+            print("Warning: RPi.GPIO not available, --rs485-gpio ignored")
 
     load_data()
     load_settings()
@@ -1021,6 +1040,8 @@ def main():
         save_data()
         if state.serial:
             state.serial.close()
+        if getattr(state, 'rs485_gpio', None) is not None:
+            GPIO.cleanup()
         srv.server_close()
 
 if __name__ == "__main__":

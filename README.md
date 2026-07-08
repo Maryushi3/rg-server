@@ -21,6 +21,23 @@ Open http://localhost:8080 in a browser.
 
 - Python 3
 - `pyserial` (`pip install pyserial`)
+- On Raspberry Pi with MAX485: `RPi.GPIO` (`pip install RPi.GPIO`)
+
+## Raspberry Pi Setup
+
+Connect MAX485 to the Pi's UART on GPIO 14 (TXD) and 15 (RXD). Tie RE and DE together to a free GPIO pin (e.g. GPIO 26). Enable the UART in `/boot/config.txt`:
+
+```
+enable_uart=1
+dtoverlay=disable-bt   # frees ttyAMA0 (PL011 UART) from Bluetooth
+```
+
+Reboot, then run:
+
+```bash
+pip install pyserial RPi.GPIO
+./start.sh --serial /dev/ttyAMA0 --rs485-gpio 26
+```
 
 ## Usage
 
@@ -31,8 +48,9 @@ python3 server.py [--port PORT] [--serial DEVICE] [--arduino-serial DEVICE]
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--port` | `8080` | HTTP server port |
-| `--serial` | *(auto)* | RS485 display serial device. Runs in simulation mode if not found. |
+| `--serial` | `/dev/ttyAMA0` | RS485 display serial device. Runs in simulation mode if not found. |
 | `--arduino-serial` | *(none)* | Serial port for DHT22 temperature/humidity sensor |
+| `--rs485-gpio` | *(none)* | BCM GPIO pin tied to MAX485 RE+DE for direction control |
 
 ## start.sh
 
