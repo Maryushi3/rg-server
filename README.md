@@ -1,18 +1,21 @@
 # RG Display Server
 
-Local HTTP server for controlling R&G LED displays over RS485.
+HTTP server for controlling R&G LED displays over RS485. Features a web UI for queue management, override, presets, scheduling, namedays, and DHT22 sensor display.
 
 ## Quick Start
 
 ```bash
-# Find your USB RS485 dongle
-ls /dev/cu.usbmodem*
+# Auto-detect serial devices (interactive)
+./start.sh
 
-# Run the server
-python server.py --serial /dev/cu.usbmodemXXXX --port 8080
+# Or specify devices directly
+./start.sh --serial /dev/cu.usbmodem2101 --arduino-serial /dev/cu.usbmodem2103
+
+# Or run directly (simulation mode if no serial device)
+python3 server.py --port 8080
 ```
 
-Open http://localhost:8080/ in a browser.
+Open http://localhost:8080 in a browser.
 
 ## Requirements
 
@@ -21,18 +24,66 @@ Open http://localhost:8080/ in a browser.
 
 ## Usage
 
+```bash
+python3 server.py [--port PORT] [--serial DEVICE] [--arduino-serial DEVICE]
 ```
-python server.py [--port 8080] [--serial /dev/cu.usbmodemXXX]
-```
 
-- `--port`: HTTP port (default 8080)
-- `--serial`: RS485 serial device path. If not specified or unavailable, runs in simulation mode (no display).
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--port` | `8080` | HTTP server port |
+| `--serial` | *(auto)* | RS485 display serial device. Runs in simulation mode if not found. |
+| `--arduino-serial` | *(none)* | Serial port for DHT22 temperature/humidity sensor |
 
-## API
+## start.sh
 
-See `API.md` in the esp32-display-controller project for the full API spec.
+The `start.sh` script auto-detects USB serial devices and interactively prompts you to assign each one (RS485 display or DHT22 Arduino). Supports macOS and Linux. Override detection with `--serial` or `--arduino-serial`. Set `PORT` environment variable to change the HTTP port.
 
 ## Files
 
-- `server.py` — HTTP server + RS485 driver
-- `webui.html` — Web-based user interface
+| File | Purpose |
+|------|---------|
+| `server.py` | HTTP server + RS485 display driver + queue logic |
+| `webui.html` | Single-page web interface |
+| `start.sh` | Interactive device detection launcher |
+| `messages.json` | Persisted message queue (gitignored) |
+| `settings.json` | Persisted settings (gitignored) |
+
+## Presets
+
+Each message has a `preset_id` that determines how it renders on the display:
+
+| Preset | Description |
+|--------|-------------|
+| `single-static` | Single line of static text |
+| `scrolling` | Single line of scrolling text |
+| `two-static` | Two static lines (separated by `\|\|` in text) |
+| `top-bottom-scroll` | Top static line, bottom scrolling line |
+| `bus` | Bus route (big font left) + destination (small font right) + scrolling route info |
+| `train` | Train station display (from/to + train number) |
+| `clock` | Current time (big font) + date + weekday |
+| `imieniny` | Polish nameday display |
+| `dht22` | Temperature and humidity from DHT22 sensor |
+
+## Queue
+
+Messages cycle in order with a configurable duration (`duration_sec`, default 10s). Supports:
+- **Random mode**: picks a random visible message instead of sequential
+- **Scheduling**: per-message time windows (from/to)
+- **Persistence**: saved to `messages.json` on every mutation
+- **Hidden messages**: skipped during normal rotation
+
+## Override
+
+A temporary message that replaces the queue. Supports an expiry timestamp. Clock and nameday overrides refresh every ~1 second. The "Save to Messages" button copies the current override into the queue.
+
+## Settings
+
+Settings are saved to `settings.json`:
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `display_number` | `29` | RS485 display address |
+| `preset_gap_ms` | `100` | Gap between multi-frame presets (min ~50ms) |
+| `keepalive_sec` | `60` | Keepalive interval |
+| `queue_running` | `true` | Whether the queue loop is active |
+| `random_mode` | `false` | Random message selection |
