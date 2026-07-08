@@ -105,3 +105,7 @@ Settings are saved to `settings.json`:
 | `keepalive_sec` | `60` | Keepalive interval |
 | `queue_running` | `true` | Whether the queue loop is active |
 | `random_mode` | `false` | Random message selection |
+
+## Credits
+
+This project would not exist without the protocol analysis and notes shared by [Mitsumi](https://github.com/Mitsumi) and [LirekPL](https://github.com/LirekPL) in the [rg-screens-things](https://github.com/HiszpanInk/rg-screens-things) repository — the definitive resource for understanding R&G display communication. Thanks for the dumps, the docs, and the hardware.
