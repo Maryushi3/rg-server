@@ -4,6 +4,7 @@ RG Display Server — local RS485 controller for R&G LED displays.
 Run: python server.py [--port 8080] [--serial /dev/...]
 """
 import argparse, json, math, os, re, serial, threading, time
+from datetime import datetime
 try:
     import RPi.GPIO as GPIO
 except (ImportError, RuntimeError):
@@ -414,6 +415,21 @@ def nameday_names_only(now):
         return re.sub(r",(?!\s)", ", ", NAMEDAYS[idx])
     return ""
 
+def nameday_short(now, max_chars=18):
+    names = _nameday_list(now)
+    result = ""
+    for name in names:
+        candidate = name if not result else result + ", " + name
+        if len(candidate) <= max_chars:
+            result = candidate
+        else:
+            break
+    return result
+
+def days_until_end_of_year(now):
+    end = datetime(now.year + 1, 1, 1)
+    return (end - now).days
+
 DAYS_PL = ["Poniedziałek", "Wtorek", "Środa", "Czwartek", "Piątek", "Sobota", "Niedziela"]
 
 def weekday_pl(now):
@@ -581,7 +597,6 @@ def expand_preset(msg):
 
     elif preset == "clock":
         # Time (font 3, line 0, left) + date (font 1, line 0, right) + weekday (font 1, line 1, under date)
-        from datetime import datetime
         now = datetime.now()
         time_str = now.strftime("%H:%M")
         time_width = sum(4 if c == '1' else (2 if c == ':' else 6) for c in time_str) + len(time_str) - 1
@@ -614,6 +629,39 @@ def expand_preset(msg):
             parts.append(("Brak czujnika", 1, 1, 1, 0, 96, 0))
         return parts
 
+    elif preset == "imieniny-static":
+        now = datetime.now()
+        parts.append(("IMIENINY", 2, 0, 1, 0, 96, 0))
+        names = nameday_short(now, 18)
+        if names:
+            parts.append((names, 1, 1, 1, 0, 96, 0))
+        return parts
+
+    elif preset == "imieniny-scroll":
+        now = datetime.now()
+        names = nameday_names_only(now)
+        parts.append((f"Imieniny: {names}", 1, 0, 1, 0, 96, 99))
+        return parts
+
+    elif preset == "do-konca-roku":
+        now = datetime.now()
+        count = days_until_end_of_year(now)
+        dni_str = "dzień" if count == 1 else "dni"
+        if msg.get("_dkr_split", False):
+            parts.append(("Do końca roku", 2, 0, 1, 0, 96, 0))
+            parts.append((f"pozostało {count} {dni_str}", 1, 1, 1, 0, 96, 0))
+        else:
+            parts.append(("Do końca roku pozostało", 1, 0, 1, 0, 96, 0))
+            parts.append((f"{count} {dni_str}", 1, 1, 1, 0, 96, 0))
+        return parts
+
+    elif preset == "do-konca-roku-scroll":
+        now = datetime.now()
+        count = days_until_end_of_year(now)
+        dni_str = "dzień" if count == 1 else "dni"
+        parts.append((f"Do końca roku pozostało {count} {dni_str}", 1, 0, 1, 0, 96, 99))
+        return parts
+
     else:  # custom
         return [(msg.get("text", ""), msg.get("font", 1), msg.get("line", 0),
                  msg.get("alignment", 0), msg.get("pos_x", 0),
@@ -621,7 +669,6 @@ def expand_preset(msg):
 
 def fill_dynamic(text):
     """Replace __clock_time__ / __clock_date__ / __clock_nameday__ with actual values."""
-    from datetime import datetime
     now = datetime.now()
     if text == "__clock_time__":
         return now.strftime("%H:%M")

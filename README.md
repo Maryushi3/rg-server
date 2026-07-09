@@ -79,7 +79,11 @@ Each message has a `preset_id` that determines how it renders on the display:
 | `bus` | Bus route (big font left) + destination (small font right) + scrolling route info |
 | `train` | Train station display (from/to + train number) |
 | `clock` | Current time (big font) + date + weekday |
-| `imieniny` | Polish nameday display |
+| `imieniny` | Polish nameday display (top static, bottom scrolling names) |
+| `imieniny-static` | Polish nameday — top "IMIENINY", bottom 2-3 names static |
+| `imieniny-scroll` | Single scrolling line "Imieniny: &lt;names&gt;" |
+| `do-konca-roku` | Days until end of year — top text, bottom count (checkbox for split rows) |
+| `do-konca-roku-scroll` | Single scrolling line with count |
 | `dht22` | Temperature and humidity from DHT22 sensor |
 
 ## Queue

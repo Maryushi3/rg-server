@@ -95,6 +95,10 @@ form input:focus,form select:focus,form textarea:focus{outline:none;border-color
             <option value="train">Train</option>
             <option value="clock">Clock</option>
             <option value="imieniny">Imieniny</option>
+            <option value="imieniny-static">Imieniny Static</option>
+            <option value="imieniny-scroll">Imieniny Scroll</option>
+            <option value="do-konca-roku">Do Końca Roku</option>
+            <option value="do-konca-roku-scroll">Do Końca Roku Scroll</option>
             <option value="dht22">DHT22 Temp/Hum</option>
           </select>
         </label>
@@ -133,6 +137,10 @@ form input:focus,form select:focus,form textarea:focus{outline:none;border-color
             <option value="train">Train</option>
             <option value="clock">Clock</option>
             <option value="imieniny">Imieniny</option>
+            <option value="imieniny-static">Imieniny Static</option>
+            <option value="imieniny-scroll">Imieniny Scroll</option>
+            <option value="do-konca-roku">Do Końca Roku</option>
+            <option value="do-konca-roku-scroll">Do Końca Roku Scroll</option>
             <option value="dht22">DHT22 Temp/Hum</option>
             </select>
         </label>
@@ -251,6 +259,15 @@ function renderPresetFields(prefix, preset) {
     'imieniny': () => `
       <p style="color:#888;font-size:.85rem">Top: "IMIENINY" (font 2, centered). Bottom: scrolling names.</p>
       <label>Scroll count <input id="${prefix}-imieniny-scroll" type="number" value="99" min="1" max="99" style="width:80px"></label>`,
+    'imieniny-static': () => `
+      <p style="color:#888;font-size:.85rem">Top: "IMIENINY" (font 2). Bottom: 2-3 names (static, centered).</p>`,
+    'imieniny-scroll': () => `
+      <p style="color:#888;font-size:.85rem">Single scrolling line: "Imieniny: &lt;names&gt;"</p>`,
+    'do-konca-roku': () => `
+      <p style="color:#888;font-size:.85rem">Top: "Do końca roku pozostało" (thin). Bottom: "&lt;count&gt; dni" (thin).</p>
+      <label><input id="${prefix}-dkr-split" type="checkbox" style="width:auto;margin-top:4px"> Split to two rows (avoids clipping)</label>`,
+    'do-konca-roku-scroll': () => `
+      <p style="color:#888;font-size:.85rem">Single scrolling line: "Do końca roku pozostało &lt;count&gt; dni"</p>`,
     'top-bottom-scroll': () => `
       <label>Top Line <input id="${prefix}-text" placeholder="Static text"></label>
       <label>Font ${tbfopts('top')}</label>
@@ -301,6 +318,10 @@ function buildMessage(prefix, preset) {
   if (preset === 'top-bottom-scroll') return {text: s('text',''), _tbs_bottom: s('tbs-bottom',''), _tbs_font_top: n('tbs-font-top',1), _tbs_font_bottom: n('tbs-font-bottom',1), _tbs_scroll: n('tbs-scroll',99), font:1, line:0, alignment:0};
   if (preset === 'clock') return {text:'', name:'', font:3, line:0, alignment:0};
   if (preset === 'imieniny') return {text:'', name:'', font:1, line:0, alignment:1, _imieniny_scroll: n('imieniny-scroll',99)};
+  if (preset === 'imieniny-static') return {text:'', name:'', font:1, line:0, alignment:1};
+  if (preset === 'imieniny-scroll') return {text:'', name:'', font:1, line:0, alignment:1};
+  if (preset === 'do-konca-roku') return {text:'', name:'', font:1, line:0, alignment:1, _dkr_split: $(`${prefix}-dkr-split`)?.checked||false};
+  if (preset === 'do-konca-roku-scroll') return {text:'', name:'', font:1, line:0, alignment:1};
   if (preset === 'dht22') return {text:'', name:'', font:1, line:0, alignment:0};
   return {text: s('text',''), font:3, line:0, alignment:1};
 }
@@ -333,6 +354,7 @@ function fillMsgFields(msg) {
   if($('f-tbs-font-bottom')) $('f-tbs-font-bottom').value = msg._tbs_font_bottom||1;
   if($('f-tbs-scroll')) $('f-tbs-scroll').value = msg._tbs_scroll||99;
   if($('f-imieniny-scroll')) $('f-imieniny-scroll').value = msg._imieniny_scroll||99;
+  if($('f-dkr-split')) $('f-dkr-split').checked = msg._dkr_split||false;
   if($('f-scroll')) {
     if(msg.preset_id === 'bus') $('f-scroll').value = msg._scroll||'';
     else $('f-scroll').value = msg.scroll||'';
